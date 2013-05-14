@@ -26,7 +26,7 @@ setup(namespace_packages = ['paegan'],
     url                 = "https://github.com/asascience-open/paegan-transport",
     packages            = find_packages(),
     cmdclass            = {'test': PyTest},
-    install_requires    = reqs
+    install_requires    = reqs,
     classifiers         = [
             'Development Status :: 3 - Alpha',
             'Intended Audience :: Developers',
