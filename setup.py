@@ -17,7 +17,7 @@ class PyTest(Command):
 
 setup(namespace_packages = ['paegan'],
     name                = "paegan-transport",
-    version             = "0.1.0",
+    version             = "0.1.1",
     description         = "Particle transport packages for the Paegan library",
     long_description    = readme,
     license             = 'LICENSE.txt',
