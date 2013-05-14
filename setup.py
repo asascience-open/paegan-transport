@@ -26,11 +26,7 @@ setup(namespace_packages = ['paegan'],
     url                 = "https://github.com/asascience-open/paegan-transport",
     packages            = find_packages(),
     cmdclass            = {'test': PyTest},
-    install_requires    = [
-                            "GDAL == 1.9.1",
-                            "Fiona == 0.8",
-                            "paegan >= 0.9.3"
-                          ],
+    install_requires    = reqs
     classifiers         = [
             'Development Status :: 3 - Alpha',
             'Intended Audience :: Developers',

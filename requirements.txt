@@ -1,4 +1,3 @@
 GDAL==1.9.1
 Fiona==0.8
-git+https://github.com/asascience-open/paegan.git@master#egg=paegan
-#/home/dev/Development/paegan
+paegan==0.9.3
