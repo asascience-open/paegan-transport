@@ -8,7 +8,10 @@ import math
 import time
 import os
 
-class ShorelineTest(unittest.TestCase):
+class ShorelineFileTest(unittest.TestCase):
+
+    def make_shoreline(self, **kwargs):
+        return Shoreline(**kwargs)
 
     def setUp(self):
         self.shoreline_path = "/data/lm/shore"
@@ -19,7 +22,7 @@ class ShorelineTest(unittest.TestCase):
         p2 = Point(-78.745631, 44.336791)
         p3 = Point(0, 0)
         st = time.time()
-        s = Shoreline(point=p, spatialbuffer=2)
+        s = self.make_shoreline(point=p, spatialbuffer=2)
         s.index(point=p2, spatialbuffer=2)
         s.index(point=p3, spatialbuffer=2)
         print "Reindexing Time: " + str(time.time() - st)
@@ -31,7 +34,7 @@ class ShorelineTest(unittest.TestCase):
         p3 = Point(0, 0)
         st = time.time()
         shore_path = os.path.join(self.shoreline_path, "alaska", "AK_Land_Basemap.shp")
-        s = Shoreline(file=shore_path, point=p, spatialbuffer=0.25)
+        s = self.make_shoreline(file=shore_path, point=p, spatialbuffer=0.25)
         s.index(point=p2, spatialbuffer=0.25)
         s.index(point=p3, spatialbuffer=0.25)
         print "Large Shoreline Reindexing Time: " + str(time.time() - st)
@@ -43,7 +46,7 @@ class ShorelineTest(unittest.TestCase):
         p3 = Point(0, 0)
         st = time.time()
         shore_path = os.path.join(self.shoreline_path, "westcoast", "New_Land_Clean.shp")
-        s = Shoreline(file=shore_path, point=p, spatialbuffer=1)
+        s = self.make_shoreline(file=shore_path, point=p, spatialbuffer=1)
         s.index(point=p2, spatialbuffer=0.25)
         s.index(point=p3, spatialbuffer=0.25)
         print "Multipart Shoreline Reindexing Time: " + str(time.time() - st)
@@ -54,7 +57,7 @@ class ShorelineTest(unittest.TestCase):
 
         starting = Location4D(longitude=-66.1842219282406177, latitude=44.0141581697495852, depth=0).point
         ending = Location4D(longitude=-66.1555195384399326, latitude=44.0387992322117370, depth=0).point
-        s = Shoreline(point=starting, spatialbuffer=1)
+        s = self.make_shoreline(point=starting, spatialbuffer=1)
 
         st = time.time()
         intersection = s.intersect(start_point=starting, end_point=ending)['point']
@@ -67,7 +70,7 @@ class ShorelineTest(unittest.TestCase):
         starting = Location4D(longitude=-146.62, latitude=60.755, depth=0).point
         ending = Location4D(longitude=-146.60, latitude=60.74, depth=0).point
         shore_path = os.path.join(self.shoreline_path, "alaska", "AK_Land_Basemap.shp")
-        s = Shoreline(file=shore_path, point=starting, spatialbuffer=0.25)
+        s = self.make_shoreline(file=shore_path, point=starting, spatialbuffer=0.25)
 
         st = time.time()
         intersection = s.intersect(start_point=starting, end_point=ending)['point']
@@ -80,7 +83,7 @@ class ShorelineTest(unittest.TestCase):
         starting = Location4D(longitude=-146.62, latitude=60.755, depth=0).point
         ending = Location4D(longitude=-146.60, latitude=60.74, depth=0).point
         shore_path = os.path.join(self.shoreline_path, "westcoast", "New_Land_Clean.shp")
-        s = Shoreline(file=shore_path, point=starting, spatialbuffer=1)
+        s = self.make_shoreline(file=shore_path, point=starting, spatialbuffer=1)
 
         st = time.time()
         intersection = s.intersect(start_point=starting, end_point=ending)['point']
@@ -88,7 +91,7 @@ class ShorelineTest(unittest.TestCase):
 
     def test_water_start_land_end_intersection(self):
         # Starts in the water and ends on land
-        s = Shoreline()
+        s = self.make_shoreline()
 
         # -75, 39   is in the middle of the Delaware Bay
         # -75, 39.5 is on land
@@ -103,7 +106,7 @@ class ShorelineTest(unittest.TestCase):
 
     def test_land_start_water_end_intersection(self):
         # Starts on land and ends in the water
-        s = Shoreline()
+        s = self.make_shoreline()
 
         # -75, 39.5 is on land
         # -75, 39   is in the middle of the Delaware Bay
@@ -114,7 +117,7 @@ class ShorelineTest(unittest.TestCase):
 
     def test_land_start_land_end_intersection(self):
         # Starts on land and ends on land
-        s = Shoreline()
+        s = self.make_shoreline()
 
         # -75, 39.4 is on land
         # -75, 39.5 is on land
@@ -126,7 +129,7 @@ class ShorelineTest(unittest.TestCase):
 
     def test_water_start_water_end_jump_over_land_intersection(self):
         # Starts on water and ends on water, but there is land inbetween
-        s = Shoreline()
+        s = self.make_shoreline()
 
         # -75, 39   is in the middle of the Delaware Bay
         # -74, 39   is in the Atlantic
@@ -144,7 +147,7 @@ class ShorelineTest(unittest.TestCase):
 
     def test_reverse_left(self):
 
-        s = Shoreline(type='reverse')
+        s = self.make_shoreline(type='reverse')
 
         starting = Location4D(latitude=39.1, longitude=-74.91, depth=0)
         ending   = Location4D(latitude=39.1, longitude=-74.85, depth=0)
@@ -174,7 +177,7 @@ class ShorelineTest(unittest.TestCase):
 
     def test_reverse_up_left(self):
 
-        s = Shoreline(type='reverse')
+        s = self.make_shoreline(type='reverse')
 
         starting = Location4D(latitude=39.05, longitude=-75.34, depth=0)
         ending   = Location4D(latitude=38.96, longitude=-75.315, depth=0)
@@ -205,7 +208,7 @@ class ShorelineTest(unittest.TestCase):
 
     def test_reverse_half_distance_until_in_water(self):
 
-        s = Shoreline(type='reverse')
+        s = self.make_shoreline(type='reverse')
 
         starting = Location4D(latitude=39.05, longitude=-75.34, depth=0)
         ending   = Location4D(latitude=38.96, longitude=-75.315, depth=0)
@@ -232,7 +235,7 @@ class ShorelineTest(unittest.TestCase):
 
     def test_reverse_12_times_then_start_point(self):
 
-        s = Shoreline(type='reverse')
+        s = self.make_shoreline(type='reverse')
 
         starting = Location4D(latitude=39.05, longitude=-75.34, depth=0)
         ending   = Location4D(latitude=38.96, longitude=-75.315, depth=0)
@@ -261,7 +264,7 @@ class ShorelineTest(unittest.TestCase):
 
     def test_reverse_distance_traveled(self):
 
-        s = Shoreline(type='reverse')
+        s = self.make_shoreline(type='reverse')
 
         starting = Location4D(latitude=39.05, longitude=-75.34, depth=0)
         ending   = Location4D(latitude=38.96, longitude=-75.315, depth=0)
@@ -286,3 +289,10 @@ class ShorelineTest(unittest.TestCase):
         # Resulting point should be VERY close to the hit point.
         assert abs(int4d.latitude - final_point.latitude) < 0.005
         assert abs(int4d.longitude - final_point.longitude) < 0.005
+
+class ShorelineWFSTest(ShorelineFileTest):
+    def make_shoreline(self, **kwargs):
+        return Shoreline(wfs_server='http://geo.asascience.com/geoserver/shorelines/ows',
+                         feature_name='shorelines:10m_land_polygons',
+                         **kwargs)
+
