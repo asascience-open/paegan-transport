@@ -104,7 +104,7 @@ class Shoreline(object):
                     return {'point': spoint, 'feature': None}
                 else:
                     # If we are testing a linestring, raise an exception that we started on land.
-                    raise Exception('Starting point on land')
+                    raise Exception('Starting point on land: %s %s %s' % (spoint.envelope, epoint.envelope, element.envelope))
             else:
                 # If we are just checking a single point, continue looping.
                 if epoint is None:
