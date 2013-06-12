@@ -317,25 +317,23 @@ class ShorelineWFS(Shoreline):
     def index(self, point=None, spatialbuffer=None):
         spatialbuffer              = spatialbuffer or self._spatialbuffer
         self._spatial_query_object = None
-
-        params = {'service'      : 'WFS',
-                  'request'      : 'GetFeature',
-                  'typeName'     : self._feature_name,
-                  'outputFormat' : 'json'}
+        geojson                    = {'features':[]}
 
         if point:
             self._spatial_query_object = point.buffer(spatialbuffer)
 
-            bounds         = self._spatial_query_object.envelope.bounds
-            params['bbox'] = ','.join((str(b) for b in bounds))
+            bounds = self._spatial_query_object.envelope.bounds
+            params = {'service'      : 'WFS',
+                      'request'      : 'GetFeature',
+                      'typeName'     : self._feature_name,
+                      'outputFormat' : 'json',
+                      'bbox'         : ','.join((str(b) for b in bounds))}
 
-            #print params['bbox']
+            raw_geojson_response = requests.get(self._wfs_server, params=params)
+            raw_geojson_response.raise_for_status()
+            geojson = raw_geojson_response.json()
 
-        raw_geojson_response = requests.get(self._wfs_server, params=params)
-        raw_geojson_response.raise_for_status()
-        geojson = raw_geojson_response.json()
-
-        #print str(geojson)[0:128]
+            #print str(geojson)[0:128]
 
         self._geoms = []
 
