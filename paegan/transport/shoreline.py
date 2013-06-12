@@ -20,6 +20,13 @@ from shapely.prepared import prep
 from paegan.logger import logger
 
 class Shoreline(object):
+    """
+    Base class for Shoreline.
+
+    Uses a factory pattern:
+        pass wfs_server/feature_name as keyword args and get a ShorelineWFS back
+        pass file (or nothing!) as a keyword arg and get a ShorelineFile back
+    """
     def __new__(cls, **kwargs):
         if 'wfs_server' in kwargs:
             return super(Shoreline, cls).__new__(ShorelineWFS, **kwargs)
@@ -247,7 +254,9 @@ class Shoreline(object):
         return new_loc
 
 class ShorelineFile(Shoreline):
-
+    """
+    Shoreline backed by a shapefile on disk.
+    """
     def __init__(self, file=None, **kwargs):
         """
             Optional named arguments: 
@@ -308,6 +317,10 @@ class ShorelineFile(Shoreline):
                 logger.warn("Could not find valid geometry in shoreline element.  Point: %s, Buffer: %s" % (str(point), str(spatialbuffer)))
 
 class ShorelineWFS(Shoreline):
+    """
+    Shoreline backed by a WFS server.
+    """
+
     def __init__(self, wfs_server=None, feature_name=None, **kwargs):
         self._wfs_server   = wfs_server
         self._feature_name = feature_name
