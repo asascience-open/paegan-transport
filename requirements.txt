@@ -1,3 +1,4 @@
 GDAL==1.9.1
 Fiona==0.8
 paegan==0.9.3
+requests==1.2.3

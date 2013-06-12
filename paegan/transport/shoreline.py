@@ -2,9 +2,11 @@ import os
 import math
 import time
 import numpy as np
+import requests
 from osgeo import ogr
 from gdalconst import *
 from shapely import wkb, geometry
+from shapely.geometry import asShape
 from shapely.geometry import LineString
 from shapely.geometry import Point, Polygon
 from shapely.geometry import MultiLineString
@@ -17,12 +19,12 @@ from shapely.prepared import prep
 
 from paegan.logger import logger
 
-#def Shoreline(file=None, src=None, **kwargs):
-#    return ShorelineFile(file=file, **kwargs)
-
 class Shoreline(object):
-    def __new__(cls, file=None, src=None, **kwargs):
-        return super(Shoreline, cls).__new__(ShorelineFile, file=file, **kwargs)
+    def __new__(cls, **kwargs):
+        if 'wfs_server' in kwargs:
+            return super(Shoreline, cls).__new__(ShorelineWFS, **kwargs)
+
+        return super(Shoreline, cls).__new__(ShorelineFile, **kwargs)
 
     def __init__(self, **kwargs):
         self._spatialbuffer = kwargs.pop("spatialbuffer", 1)
@@ -306,5 +308,46 @@ class ShorelineFile(Shoreline):
                 logger.warn("Could not find valid geometry in shoreline element.  Point: %s, Buffer: %s" % (str(point), str(spatialbuffer)))
 
 class ShorelineWFS(Shoreline):
-    pass
+    def __init__(self, wfs_server=None, feature_name=None, **kwargs):
+        self._wfs_server   = wfs_server
+        self._feature_name = feature_name
+
+        super(ShorelineWFS, self).__init__(**kwargs)
+
+    def index(self, point=None, spatialbuffer=None):
+        spatialbuffer              = spatialbuffer or self._spatialbuffer
+        self._spatial_query_object = None
+
+        params = {'service'      : 'WFS',
+                  'request'      : 'GetFeature',
+                  'typeName'     : self._feature_name,
+                  'outputFormat' : 'json'}
+
+        if point:
+            self._spatial_query_object = point.buffer(spatialbuffer)
+
+            bounds         = self._spatial_query_object.envelope.bounds
+            params['bbox'] = ','.join((str(b) for b in bounds))
+
+            #print params['bbox']
+
+        raw_geojson_response = requests.get(self._wfs_server, params=params)
+        raw_geojson_response.raise_for_status()
+        geojson = raw_geojson_response.json()
+
+        #print str(geojson)[0:128]
+
+        self._geoms = []
+
+        for element in geojson['features']:
+            try:
+                geom = asShape(element['geometry'])
+                #print type(geom), isinstance(geom, MultiPolygon)
+                if isinstance(geom, Polygon):
+                    self._geoms.append(geom)
+                elif isinstance(geom, MultiPolygon):
+                    for poly in geom:
+                        self._geoms.append(poly)
+            finally:
+                logger.warn("Could not find valid geometry in shoreline element.  Point: %s, Buffer: %s" % (str(point), str(spatialbuffer)))
 
