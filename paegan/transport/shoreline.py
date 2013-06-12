@@ -17,41 +17,29 @@ from shapely.prepared import prep
 
 from paegan.logger import logger
 
+#def Shoreline(file=None, src=None, **kwargs):
+#    return ShorelineFile(file=file, **kwargs)
+
 class Shoreline(object):
+    def __new__(cls, file=None, src=None, **kwargs):
+        return super(Shoreline, cls).__new__(ShorelineFile, file=file, **kwargs)
+
     def __init__(self, **kwargs):
-        """
-            Optional named arguments: 
-            * file (local path to OGC complient file)
-
-            MUST BE land polygons!!
-        """
-
-        if kwargs.get("file") is not None:
-            self._file = os.path.normpath(kwargs.pop('file'))
-        else:
-            self._file = os.path.normpath(os.path.join(__file__,"../../resources/shoreline/global/10m_land.shp"))
-
-        point = kwargs.pop("point", None)
         self._spatialbuffer = kwargs.pop("spatialbuffer", 1)
+        self._type          = kwargs.pop("type", "reverse")
+        point               = kwargs.pop("point", None)
 
-        self._source = ogr.Open(self._file, GA_ReadOnly)
-        if not self._source:
-            raise Exception('Could not load {}'.format(self._file))
-
-        self._type = kwargs.pop("type", "reverse")
-        self._layer = self._source.GetLayer()
-        self._geoms = []
         self.index(point=point)
 
     def close(self):
-        # Srsly. Per GDAL docs this is how we should close the dataset.
-        self._source = None
+        pass
 
-    def get_geoms(self):
+    @property
+    def geoms(self):
         return self._geoms
-    geoms = property(get_geoms, None)
 
-    def get_linestring(self):
+    @property
+    def linestring(self):
         points = []
         for poly in self._geoms:
             plines = list(poly.exterior.coords)
@@ -60,9 +48,8 @@ class Shoreline(object):
 
             points.append(Point(np.nan, np.nan)) # blank point needed to remove crossing of lines
         return LineString(map(lambda x: list(x.coords)[0], points))
-    linestring = property(get_linestring, None)
 
-    def index(self, **kwargs):
+    def index(self, point=None, spatialbuffer=None):
         """
             This queries the shapefile around a buffer of a point
             The results of this spatial query are used for shoreline detection.
@@ -71,31 +58,7 @@ class Shoreline(object):
             30 times the time with world land polygons.
 
         """
-
-        point = kwargs.pop("point", None)
-        spatialbuffer = kwargs.pop("spatialbuffer", self._spatialbuffer)
-
-        self._layer.SetSpatialFilter(None)
-        self._spatial_query_object = None
-        
-        if point:
-            self._spatial_query_object = point.buffer(spatialbuffer)
-            poly = ogr.CreateGeometryFromWkt(self._spatial_query_object.wkt)
-            self._layer.SetSpatialFilter(poly)
-            poly.Destroy()
-
-        self._geoms = []
-        # The _geoms should be only Polygons, not MultiPolygons
-        for element in self._layer:
-            try:
-                geom = wkb.loads(element.GetGeometryRef().ExportToWkb())
-                if isinstance(geom, Polygon):
-                    self._geoms.append(geom)
-                elif isinstance(geom, MultiPolygon):
-                    for poly in geom:
-                        self._geoms.append(poly)
-            except:
-                logger.warn("Could not find valid geometry in shoreline element.  Point: %s, Buffer: %s" % (str(point), str(spatialbuffer)))
+        pass
 
     def intersect(self, **kwargs):
         """
@@ -280,3 +243,68 @@ class Shoreline(object):
             return start_point
 
         return new_loc
+
+class ShorelineFile(Shoreline):
+
+    def __init__(self, file=None, **kwargs):
+        """
+            Optional named arguments: 
+            * file (local path to OGC complient file)
+
+            MUST BE land polygons!!
+        """
+        if file is not None:
+            self._file = os.path.normpath(file)
+        else:
+            self._file = os.path.normpath(os.path.join(__file__,"../../resources/shoreline/global/10m_land.shp"))
+
+        self._source = ogr.Open(self._file, GA_ReadOnly)
+        if not self._source:
+            raise StandardError('Could not load {}'.format(self._file))
+
+        self._layer = self._source.GetLayer()
+
+        super(ShorelineFile, self).__init__(**kwargs)
+
+    def close(self):
+        super(ShorelineFile, self).close()
+
+        # Srsly. Per GDAL docs this is how we should close the dataset.
+        self._source = None
+
+    def index(self, point=None, spatialbuffer=None):
+        """
+            This queries the shapefile around a buffer of a point
+            The results of this spatial query are used for shoreline detection.
+
+            Using the entire shapefile without the spatial query takes over
+            30 times the time with world land polygons.
+
+        """
+        spatialbuffer = spatialbuffer or self._spatialbuffer
+
+        self._layer.SetSpatialFilter(None)
+        self._spatial_query_object = None
+
+        if point:
+            self._spatial_query_object = point.buffer(spatialbuffer)
+            poly = ogr.CreateGeometryFromWkt(self._spatial_query_object.wkt)
+            self._layer.SetSpatialFilter(poly)
+            poly.Destroy()
+
+        self._geoms = []
+        # The _geoms should be only Polygons, not MultiPolygons
+        for element in self._layer:
+            try:
+                geom = wkb.loads(element.GetGeometryRef().ExportToWkb())
+                if isinstance(geom, Polygon):
+                    self._geoms.append(geom)
+                elif isinstance(geom, MultiPolygon):
+                    for poly in geom:
+                        self._geoms.append(poly)
+            except:
+                logger.warn("Could not find valid geometry in shoreline element.  Point: %s, Buffer: %s" % (str(point), str(spatialbuffer)))
+
+class ShorelineWFS(Shoreline):
+    pass
+
