@@ -327,6 +327,7 @@ class ShorelineWFS(Shoreline):
                       'request'      : 'GetFeature',
                       'typeName'     : self._feature_name,
                       'outputFormat' : 'json',
+                      'version'      : '1.0.0',
                       'bbox'         : ','.join((str(b) for b in bounds))}
 
             raw_geojson_response = requests.get(self._wfs_server, params=params)
