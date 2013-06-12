@@ -91,7 +91,7 @@ class Shoreline(object):
 
         # If the current point lies outside of our current shapefile index,
         # re-query the shapefile in a buffer around this point
-        if self._spatial_query_object and not ls.within(self._spatial_query_object):
+        if self._spatial_query_object is None or (self._spatial_query_object and not ls.within(self._spatial_query_object)):
             self.index(point=spoint)
 
         for element in self._geoms:
