@@ -3,10 +3,12 @@ import math
 import time
 import numpy as np
 import requests
+import urlparse
+from xml.etree import ElementTree as ET
 from osgeo import ogr
 from gdalconst import *
 from shapely import wkb, geometry
-from shapely.geometry import asShape
+from shapely.geometry import asShape, box
 from shapely.geometry import LineString
 from shapely.geometry import Point, Polygon
 from shapely.geometry import MultiLineString
@@ -24,10 +26,17 @@ class Shoreline(object):
     Base class for Shoreline.
 
     Uses a factory pattern:
+        pass path as kwarg to have this method analyze and create appropriate
+            Shoreline derived class
         pass wfs_server/feature_name as keyword args and get a ShorelineWFS back
         pass file (or nothing!) as a keyword arg and get a ShorelineFile back
     """
     def __new__(cls, **kwargs):
+        if 'path' in kwargs:
+            parsed = urlparse.urlparse(kwargs['path'])
+            if parsed.scheme.startswith('http') and parsed.netloc:
+                return super(Shoreline, cls).__new__(ShorelineWFS, **kwargs)
+
         if 'wfs_server' in kwargs:
             return super(Shoreline, cls).__new__(ShorelineWFS, **kwargs)
 
@@ -57,6 +66,22 @@ class Shoreline(object):
 
             points.append(Point(np.nan, np.nan)) # blank point needed to remove crossing of lines
         return LineString(map(lambda x: list(x.coords)[0], points))
+
+    def get_capabilities(self):
+        """
+        Gets capabilities.
+
+        Only defined in ShorelineWFS. Queries WFS server for its capabilities.
+        """
+        return None
+
+    def get_feature_type_info(self):
+        """
+        Gets FeatureType as a python dict.
+
+        Only defined in ShorelineWFS. Transforms feature_name info into python dict.
+        """
+        return None
 
     def index(self, point=None, spatialbuffer=None):
         """
@@ -257,14 +282,17 @@ class ShorelineFile(Shoreline):
     """
     Shoreline backed by a shapefile on disk.
     """
-    def __init__(self, file=None, **kwargs):
+    def __init__(self, file=None, path=None, **kwargs):
         """
             Optional named arguments: 
             * file (local path to OGC complient file)
+            * path (used instead of file)
 
             MUST BE land polygons!!
         """
-        if file is not None:
+        if path is not None:
+            self._file = os.path.normpath(path)
+        elif file is not None:
             self._file = os.path.normpath(file)
         else:
             self._file = os.path.normpath(os.path.join(__file__,"../../resources/shoreline/global/10m_land.shp"))
@@ -321,11 +349,59 @@ class ShorelineWFS(Shoreline):
     Shoreline backed by a WFS server.
     """
 
-    def __init__(self, wfs_server=None, feature_name=None, **kwargs):
-        self._wfs_server   = wfs_server
+    def __init__(self, path=None, wfs_server=None, feature_name=None, **kwargs):
+        self._wfs_server   = path or wfs_server
         self._feature_name = feature_name
 
         super(ShorelineWFS, self).__init__(**kwargs)
+
+    def get_capabilities(self):
+        """
+        Gets capabilities.
+
+        Queries WFS server for its capabilities. Internally ised by get_feature_type_info.
+        """
+        params = {'service'      : 'WFS',
+                  'request'      : 'GetCapabilities',
+                  'version'      : '1.0.0'}
+
+        caps_response = requests.get(self._wfs_server, params=params)
+        caps_response.raise_for_status()
+
+        return ET.fromstring(caps_response.content)
+
+    def get_feature_type_info(self):
+        """
+        Gets FeatureType as a python dict.
+
+        Transforms feature_name info into python dict.
+        """
+        caps = self.get_capabilities()
+        if caps is None:
+            return None
+
+        el = caps.find('{http://www.opengis.net/wfs}FeatureTypeList')
+        for e in el.findall('{http://www.opengis.net/wfs}FeatureType'):
+            if e.find('{http://www.opengis.net/wfs}Name').text == self._feature_name:
+                # transform into python dict
+                # <Name>sample</Name>
+                # <Abstract/>
+                # <LatLongBoundingBox maxx="1" maxy="5" ... />
+                #
+                # becomes:
+                #
+                # {'Name'               :'sample',
+                #  'Abtract'            : None,
+                #  'LatLongBoundingBox' : {'maxx':1, 'maxy':5 ... }}
+                #
+                d = {sube.tag[28:]:sube.text or sube.attrib or None for sube in e.getchildren()}
+
+                # transform LatLongBoundingBox into a Shapely box
+                llbb = {k:float(v) for k,v in d['LatLongBoundingBox'].iteritems()}
+                d['LatLongBoundingBox'] = box(llbb['minx'], llbb['miny'], llbb['maxx'], llbb['maxy'])
+                return d
+
+        return None
 
     def index(self, point=None, spatialbuffer=None):
         spatialbuffer              = spatialbuffer or self._spatialbuffer
