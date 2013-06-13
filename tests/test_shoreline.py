@@ -1,12 +1,38 @@
 import unittest
 from paegan.location4d import Location4D
-from paegan.transport.shoreline import Shoreline
+from paegan.transport.shoreline import Shoreline, ShorelineFile, ShorelineWFS
 from shapely.geometry import Point
 from paegan.utils.asagreatcircle import AsaGreatCircle
 from paegan.utils.asamath import AsaMath
 import math
 import time
 import os
+
+class ShorelineTest(unittest.TestCase):
+
+    shore_path = os.path.join("/data", "lm", "shore", "alaska", "AK_Land_Basemap.shp")
+
+    def test_new_with_path_url(self):
+        s = Shoreline(path='http://example.com/wfs', feature_name='teso')
+        assert isinstance(s, ShorelineWFS)
+        assert hasattr(s, '_feature_name')
+        assert s._feature_name == 'teso'
+
+    def test_new_with_path_file(self):
+        s = Shoreline(path=self.shore_path)
+        assert isinstance(s, ShorelineFile)
+
+    def test_new_with_file(self):
+        s = Shoreline(file=self.shore_path)
+        assert isinstance(s, ShorelineFile)
+
+    def test_new_with_wfs_server(self):
+        s = Shoreline(wfs_server='http://example.com/wfs', feature_name='teso')
+        assert isinstance(s, ShorelineWFS)
+
+    def test_new_with_nothing(self):
+        s = Shoreline()
+        assert isinstance(s, ShorelineFile)
 
 class ShorelineFileTest(unittest.TestCase):
 
@@ -290,9 +316,33 @@ class ShorelineFileTest(unittest.TestCase):
         assert abs(int4d.latitude - final_point.latitude) < 0.005
         assert abs(int4d.longitude - final_point.longitude) < 0.005
 
+    def test_get_capabilities(self):
+        s = Shoreline()
+        assert s.get_capabilities() == None
+
+    def test_get_feature_type_info(self):
+        s = Shoreline()
+        assert s.get_feature_type_info() == None
+
 class ShorelineWFSTest(ShorelineFileTest):
     def make_shoreline(self, **kwargs):
         return Shoreline(wfs_server='http://geo.asascience.com/geoserver/shorelines/ows',
                          feature_name='shorelines:10m_land_polygons',
                          **kwargs)
+
+    def test_get_capabilities(self):
+        s = self.make_shoreline()
+        caps = s.get_capabilities()
+
+        assert len(caps.getchildren()) == 4
+        nameel = caps.find('./{http://www.opengis.net/wfs}Service/{http://www.opengis.net/wfs}Name')
+
+        assert nameel.text == 'WFS'
+
+    def test_get_feature_type_info(self):
+        s = self.make_shoreline()
+        ft = s.get_feature_type_info()
+
+        assert ft['Title'] == '10m_land_polygons'
+
 
