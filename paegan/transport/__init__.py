@@ -10,3 +10,5 @@ try:
     logging.Logger.progress = progress
 except:
     pass
+
+__version__ = '0.2-dev'
