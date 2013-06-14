@@ -103,7 +103,7 @@ class ModelController(object):
             c = geo.centroid
             b = geo.bounds
             spatialbuffer = max(b[2] - b[0], b[3] - b[1])
-            shore_geoms = Shoreline(file=self.shoreline_path, point=c, spatialbuffer=spatialbuffer).geoms
+            shore_geoms = Shoreline(path=self.shoreline_path, point=c, spatialbuffer=spatialbuffer).geoms
             if len(shore_geoms) > 0:
                 all_shore = cascaded_union(shore_geoms)
                 geo = geo.difference(all_shore)
