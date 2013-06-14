@@ -32,7 +32,7 @@ class Shoreline(object):
         pass file (or nothing!) as a keyword arg and get a ShorelineFile back
     """
     def __new__(cls, **kwargs):
-        if 'path' in kwargs:
+        if 'path' in kwargs and kwargs['path'] is not None:
             parsed = urlparse.urlparse(kwargs['path'])
             if parsed.scheme.startswith('http') and parsed.netloc:
                 return super(Shoreline, cls).__new__(ShorelineWFS, **kwargs)
