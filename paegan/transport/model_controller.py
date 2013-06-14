@@ -74,6 +74,7 @@ class ModelController(object):
         self._horiz_chunk = kwargs.get('horiz_chunk', 5)
         self.time_method = kwargs.get('time_method', 'interp')
         self.shoreline_path = kwargs.get("shoreline_path", None)
+        self.shoreline_feature = kwargs.get("shoreline_feature", None)
 
         self.reverse_distance = kwargs.get("reverse_distance", 100)
 
@@ -103,7 +104,7 @@ class ModelController(object):
             c = geo.centroid
             b = geo.bounds
             spatialbuffer = max(b[2] - b[0], b[3] - b[1])
-            shore_geoms = Shoreline(path=self.shoreline_path, point=c, spatialbuffer=spatialbuffer).geoms
+            shore_geoms = Shoreline(path=self.shoreline_path, feature_name=self.shoreline_feature, point=c, spatialbuffer=spatialbuffer).geoms
             if len(shore_geoms) > 0:
                 all_shore = cascaded_union(shore_geoms)
                 geo = geo.difference(all_shore)
@@ -346,6 +347,7 @@ class ModelController(object):
                                         reverse_distance=self.reverse_distance,
                                         bathy=self.bathy_path,
                                         shoreline_path=self.shoreline_path,
+                                        shoreline_feature=self.shoreline_feature,
                                         cache=self.cache_path,
                                         time_method=self.time_method)
             tasks.put(forcing)

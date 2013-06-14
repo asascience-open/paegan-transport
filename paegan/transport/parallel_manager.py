@@ -444,7 +444,7 @@ class ForceParticle(object):
                  release_location_centroid, usebathy, useshore, usesurface,
                  get_data, n_run, read_lock, has_read_lock, read_count,
                  point_get, data_request_lock, has_data_request_lock, reverse_distance=None, bathy=None,
-                 shoreline_path=None, cache=None, time_method=None):
+                 shoreline_path=None, shoreline_feature=None, cache=None, time_method=None):
         """
             This is the task/class/object/job that forces an
             individual particle and communicates with the 
@@ -473,6 +473,7 @@ class ForceParticle(object):
         self.data_request_lock = data_request_lock
         self.has_data_request_lock = has_data_request_lock
         self.shoreline_path = shoreline_path
+        self.shoreline_feature = shoreline_feature
         self.timevar_pickle_path = timevar_pickle_path
 
         # Set common variable names
@@ -811,7 +812,7 @@ class ForceParticle(object):
         
         self._shoreline = None  
         if self.useshore == True:
-            self._shoreline = Shoreline(file=self.shoreline_path, point=self.release_location_centroid, spatialbuffer=0.25)
+            self._shoreline = Shoreline(path=self.shoreline_path, feature_name=self.shoreline_feature, point=self.release_location_centroid, spatialbuffer=0.25)
             # Make sure we are not starting on land.  Raises exception if we are.
             self._shoreline.intersect(start_point=self.release_location_centroid, end_point=self.release_location_centroid)
             
