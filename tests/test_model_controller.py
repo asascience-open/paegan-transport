@@ -57,6 +57,20 @@ class ModelControllerTest(unittest.TestCase):
         cache_path = os.path.join(self.cache_path, "test_run_from_point.nc")
         model.run("http://thredds.axiomalaska.com/thredds/dodsC/PWS_L2_FCST.nc", cache=cache_path)
 
+    def test_run_from_point_with_wfs(self):
+        self.log.logger.info("**************************************")
+        self.log.logger.info("Running: test_run_from_point_with_wfs")
+
+        models = [self.transport]
+
+        p = Point(self.start_lon, self.start_lat, self.start_depth)
+
+        model = ModelController(geometry=p, start=self.start_time, step=self.time_step, nstep=self.num_steps, npart=self.num_particles, models=models, use_bathymetry=False, use_shoreline=True,
+            time_chunk=10, horiz_chunk=4, shoreline_path='http://geo.asascience.com/geoserver/shorelines/ows', shoreline_feature='shorelines:10m_land_polygons')
+
+        cache_path = os.path.join(self.cache_path, "test_run_from_point.nc")
+        model.run("http://thredds.axiomalaska.com/thredds/dodsC/PWS_L2_FCST.nc", cache=cache_path)
+
     def test_run_from_polygon(self):
         self.log.logger.info("**************************************")
         self.log.logger.info("Running: test_run_from_polygon")
