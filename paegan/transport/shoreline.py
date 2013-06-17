@@ -1,3 +1,4 @@
+import json
 import os
 import math
 import time
@@ -7,7 +8,7 @@ import urlparse
 from xml.etree import ElementTree as ET
 from osgeo import ogr
 from gdalconst import *
-from shapely import wkb, geometry
+from shapely import geometry
 from shapely.geometry import asShape, box
 from shapely.geometry import LineString
 from shapely.geometry import Point, Polygon
@@ -82,6 +83,12 @@ class Shoreline(object):
         Only defined in ShorelineWFS. Transforms feature_name info into python dict.
         """
         return None
+
+    def get_geoms_for_bounds(self, bounds):
+        """
+        Helper method to get geometries withiin a certain bounds.
+        """
+        pass
 
     def index(self, point=None, spatialbuffer=None):
         """
@@ -311,6 +318,15 @@ class ShorelineFile(Shoreline):
         # Srsly. Per GDAL docs this is how we should close the dataset.
         self._source = None
 
+    def get_geoms_for_bounds(self, bounds):
+        """
+        Helper method to get geometries within a certain bounds.
+
+        Returns GeoJSON (loaded as a list of python dictionaries).
+        """
+        self._layer.SetSpatialFilter(bounds)
+        return [json.loads(e.GetGeometryRef().ExportToJson()) for e in self._layer]
+
     def index(self, point=None, spatialbuffer=None):
         """
             This queries the shapefile around a buffer of a point
@@ -324,18 +340,19 @@ class ShorelineFile(Shoreline):
 
         self._layer.SetSpatialFilter(None)
         self._spatial_query_object = None
+        geoms                      = []
 
         if point:
             self._spatial_query_object = point.buffer(spatialbuffer)
             poly = ogr.CreateGeometryFromWkt(self._spatial_query_object.wkt)
-            self._layer.SetSpatialFilter(poly)
+            geoms = self.get_geoms_for_bounds(poly)
             poly.Destroy()
 
         self._geoms = []
         # The _geoms should be only Polygons, not MultiPolygons
-        for element in self._layer:
+        for element in geoms:
             try:
-                geom = wkb.loads(element.GetGeometryRef().ExportToWkb())
+                geom = asShape(element)
                 if isinstance(geom, Polygon):
                     self._geoms.append(geom)
                 elif isinstance(geom, MultiPolygon):
@@ -403,31 +420,39 @@ class ShorelineWFS(Shoreline):
 
         return None
 
+    def get_geoms_for_bounds(self, bounds):
+        """
+        Helper method to get geometries within a certain bounds.
+
+        Returns GeoJSON (loaded as a list of python dictionaries).
+        """
+
+        params = {'service'      : 'WFS',
+                  'request'      : 'GetFeature',
+                  'typeName'     : self._feature_name,
+                  'outputFormat' : 'json',
+                  'version'      : '1.0.0',
+                  'bbox'         : ','.join((str(b) for b in bounds))}
+
+        raw_geojson_response = requests.get(self._wfs_server, params=params)
+        raw_geojson_response.raise_for_status()
+        geojson = raw_geojson_response.json()
+
+        return geojson['features']
+
     def index(self, point=None, spatialbuffer=None):
         spatialbuffer              = spatialbuffer or self._spatialbuffer
         self._spatial_query_object = None
-        geojson                    = {'features':[]}
+        geoms                      = []
 
         if point:
             self._spatial_query_object = point.buffer(spatialbuffer)
-
-            bounds = self._spatial_query_object.envelope.bounds
-            params = {'service'      : 'WFS',
-                      'request'      : 'GetFeature',
-                      'typeName'     : self._feature_name,
-                      'outputFormat' : 'json',
-                      'version'      : '1.0.0',
-                      'bbox'         : ','.join((str(b) for b in bounds))}
-
-            raw_geojson_response = requests.get(self._wfs_server, params=params)
-            raw_geojson_response.raise_for_status()
-            geojson = raw_geojson_response.json()
-
-            #print str(geojson)[0:128]
+            bounds                     = self._spatial_query_object.envelope.bounds
+            geoms                      = self.get_geoms_for_bounds(bounds)
 
         self._geoms = []
 
-        for element in geojson['features']:
+        for element in geoms:
             try:
                 geom = asShape(element['geometry'])
                 #print type(geom), isinstance(geom, MultiPolygon)
