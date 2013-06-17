@@ -8,7 +8,7 @@ import urlparse
 from xml.etree import ElementTree as ET
 from osgeo import ogr
 from gdalconst import *
-from shapely import geometry
+from shapely import geometry, wkt
 from shapely.geometry import asShape, box
 from shapely.geometry import LineString
 from shapely.geometry import Point, Polygon
@@ -320,11 +320,14 @@ class ShorelineFile(Shoreline):
 
     def get_geoms_for_bounds(self, bounds):
         """
-        Helper method to get geometries within a certain bounds.
+        Helper method to get geometries within a certain bounds (as WKT).
 
         Returns GeoJSON (loaded as a list of python dictionaries).
         """
-        self._layer.SetSpatialFilter(bounds)
+        poly = ogr.CreateGeometryFromWkt(bounds)
+        self._layer.SetSpatialFilter(poly)
+        poly.Destroy()
+
         return [json.loads(e.GetGeometryRef().ExportToJson()) for e in self._layer]
 
     def index(self, point=None, spatialbuffer=None):
@@ -344,9 +347,7 @@ class ShorelineFile(Shoreline):
 
         if point:
             self._spatial_query_object = point.buffer(spatialbuffer)
-            poly = ogr.CreateGeometryFromWkt(self._spatial_query_object.wkt)
-            geoms = self.get_geoms_for_bounds(poly)
-            poly.Destroy()
+            geoms = self.get_geoms_for_bounds(self._spatial_query_object.wkt)
 
         self._geoms = []
         # The _geoms should be only Polygons, not MultiPolygons
@@ -414,7 +415,7 @@ class ShorelineWFS(Shoreline):
                 d = {sube.tag[28:]:sube.text or sube.attrib or None for sube in e.getchildren()}
 
                 # transform LatLongBoundingBox into a Shapely box
-                llbb = {k:float(v) for k,v in d['LatLongBoundingBox'].iteritems()}
+                llbb = {k:round(float(v), 4) for k,v in d['LatLongBoundingBox'].iteritems()}
                 d['LatLongBoundingBox'] = box(llbb['minx'], llbb['miny'], llbb['maxx'], llbb['maxy'])
                 return d
 
@@ -422,7 +423,7 @@ class ShorelineWFS(Shoreline):
 
     def get_geoms_for_bounds(self, bounds):
         """
-        Helper method to get geometries within a certain bounds.
+        Helper method to get geometries within a certain bounds (as WKT).
 
         Returns GeoJSON (loaded as a list of python dictionaries).
         """
@@ -432,13 +433,13 @@ class ShorelineWFS(Shoreline):
                   'typeName'     : self._feature_name,
                   'outputFormat' : 'json',
                   'version'      : '1.0.0',
-                  'bbox'         : ','.join((str(b) for b in bounds))}
+                  'bbox'         : ','.join((str(b) for b in wkt.loads(bounds).bounds))}
 
         raw_geojson_response = requests.get(self._wfs_server, params=params)
         raw_geojson_response.raise_for_status()
         geojson = raw_geojson_response.json()
 
-        return geojson['features']
+        return [g['geometry'] for g in geojson['features']]
 
     def index(self, point=None, spatialbuffer=None):
         spatialbuffer              = spatialbuffer or self._spatialbuffer
@@ -447,14 +448,14 @@ class ShorelineWFS(Shoreline):
 
         if point:
             self._spatial_query_object = point.buffer(spatialbuffer)
-            bounds                     = self._spatial_query_object.envelope.bounds
+            bounds                     = self._spatial_query_object.envelope.wkt
             geoms                      = self.get_geoms_for_bounds(bounds)
 
         self._geoms = []
 
         for element in geoms:
             try:
-                geom = asShape(element['geometry'])
+                geom = asShape(element)
                 #print type(geom), isinstance(geom, MultiPolygon)
                 if isinstance(geom, Polygon):
                     self._geoms.append(geom)
