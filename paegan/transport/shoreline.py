@@ -415,7 +415,7 @@ class ShorelineWFS(Shoreline):
                 d = {sube.tag[28:]:sube.text or sube.attrib or None for sube in e.getchildren()}
 
                 # transform LatLongBoundingBox into a Shapely box
-                llbb = {k:float(v) for k,v in d['LatLongBoundingBox'].iteritems()}
+                llbb = {k:round(float(v), 4) for k,v in d['LatLongBoundingBox'].iteritems()}
                 d['LatLongBoundingBox'] = box(llbb['minx'], llbb['miny'], llbb['maxx'], llbb['maxy'])
                 return d
 
