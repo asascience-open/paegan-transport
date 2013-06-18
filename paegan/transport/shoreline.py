@@ -72,7 +72,7 @@ class Shoreline(object):
         """
         Gets capabilities.
 
-        Only defined in ShorelineWFS. Queries WFS server for its capabilities.
+        Queries WFS server or file for its capabilities (or simulated capabilities).
         """
         return None
 
@@ -80,7 +80,7 @@ class Shoreline(object):
         """
         Gets FeatureType as a python dict.
 
-        Only defined in ShorelineWFS. Transforms feature_name info into python dict.
+        Transforms feature_name info into python dict.
         """
         return None
 
@@ -318,6 +318,31 @@ class ShorelineFile(Shoreline):
         # Srsly. Per GDAL docs this is how we should close the dataset.
         self._source = None
 
+    def get_capabilities(self):
+        """
+        Gets capabilities.
+
+        This is a simulation of a GetCapabilities WFS request. Returns a python dict
+        with LatLongBoundingBox and Name keys defined.
+        """
+        d = {}
+
+        ext = self._layer.GetExtent()       # @TODO if a filter is on this may give different results
+        llbb = [round(float(v), 4) for v in ext]
+
+        d['LatLongBoundingBox'] = box(llbb[0], llbb[2], llbb[1], llbb[3])
+        d['Name']               = self._file.split('/')[-1].split('.')[0]
+
+        return d
+
+    def get_feature_type_info(self):
+        """
+        Gets FeatureType as a python dict.
+
+        On ShorelineFile this is a passthrough to the simulated get_capabilities.
+        """
+        return self.get_capabilities()
+
     def get_geoms_for_bounds(self, bounds):
         """
         Helper method to get geometries within a certain bounds (as WKT).
@@ -377,7 +402,7 @@ class ShorelineWFS(Shoreline):
         """
         Gets capabilities.
 
-        Queries WFS server for its capabilities. Internally ised by get_feature_type_info.
+        Queries WFS server for its capabilities. Internally used by get_feature_type_info.
         """
         params = {'service'      : 'WFS',
                   'request'      : 'GetCapabilities',
