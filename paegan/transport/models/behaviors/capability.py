@@ -18,7 +18,7 @@ class Capability(object):
             self.vss = data.get('vss', None)
             self.swim_turning = data.get('swim_turning', None)
             self.non_swim_turning = data.get('nonswim_turning', None)
-            self.variance = data.get('variance', None)
+            self.variance = data.get('variance', 0)
             # We initialize the calculated VSS here.  This is not 
             # Recaculated on access.  It needs to be manually recaculated
             # for each Capability.
