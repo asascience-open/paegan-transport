@@ -55,7 +55,7 @@ class ModelControllerTest(unittest.TestCase):
             time_chunk=10, horiz_chunk=4)
 
         cache_path = os.path.join(self.cache_path, "test_run_from_point.nc")
-        model.run("http://thredds.axiomalaska.com/thredds/dodsC/PWS_L2_FCST.nc", cache=cache_path)
+        model.run("http://thredds.axiomalaska.com/thredds/dodsC/PWS_L2_FCST.nc", bathy=self.bathy_file, cache=cache_path)
 
     def test_run_from_point_with_wfs(self):
         self.log.logger.info("**************************************")
@@ -69,7 +69,7 @@ class ModelControllerTest(unittest.TestCase):
             time_chunk=10, horiz_chunk=4, shoreline_path='http://geo.asascience.com/geoserver/shorelines/ows', shoreline_feature='shorelines:10m_land_polygons')
 
         cache_path = os.path.join(self.cache_path, "test_run_from_point.nc")
-        model.run("http://thredds.axiomalaska.com/thredds/dodsC/PWS_L2_FCST.nc", cache=cache_path)
+        model.run("http://thredds.axiomalaska.com/thredds/dodsC/PWS_L2_FCST.nc", bathy=self.bathy_file, cache=cache_path)
 
     def test_run_from_polygon(self):
         self.log.logger.info("**************************************")
@@ -83,7 +83,7 @@ class ModelControllerTest(unittest.TestCase):
             time_chunk=10, horiz_chunk=4)
 
         cache_path = os.path.join(os.path.dirname(__file__), "..", "paegan/transport/_cache/test_run_from_polygon.nc")
-        model.run("http://thredds.axiomalaska.com/thredds/dodsC/PWS_L2_FCST.nc", cache=cache_path)
+        model.run("http://thredds.axiomalaska.com/thredds/dodsC/PWS_L2_FCST.nc", bathy=self.bathy_file, cache=cache_path)
 
     def test_interp(self):
         self.log.logger.info("**************************************")
@@ -109,7 +109,7 @@ class ModelControllerTest(unittest.TestCase):
         self.log.logger.info("Running: test_nearest")
 
         models = [self.transport]
-        
+
         num_steps = 100
 
         output_path = os.path.join(self.output_path, "test_nearest")
@@ -139,7 +139,7 @@ class ModelControllerTest(unittest.TestCase):
         cache_path = os.path.join(self.cache_path, "test_start_on_land.nc")
 
         with raises(ModelError):
-            model.run("http://thredds.axiomalaska.com/thredds/dodsC/PWS_L2_FCST.nc", cache=cache_path)
+            model.run("http://thredds.axiomalaska.com/thredds/dodsC/PWS_L2_FCST.nc", bathy=self.bathy_file, cache=cache_path)
 
     def test_bad_dataset(self):
         self.log.logger.info("**************************************")
@@ -151,9 +151,9 @@ class ModelControllerTest(unittest.TestCase):
             time_chunk=10, horiz_chunk=4, time_method='nearest')
 
         cache_path = os.path.join(self.cache_path, "test_bad_dataset.nc")
-        
+
         with raises(DataControllerError):
-            model.run("http://asascience.com/thisisnotadataset.nc", cache=cache_path)
+            model.run("http://asascience.com/thisisnotadataset.nc", bathy=self.bathy_file, cache=cache_path)
 
     """
     def test_behavior_growth_and_settlement(self):
@@ -263,10 +263,10 @@ class ModelControllerTest(unittest.TestCase):
         shutil.rmtree(output_path, ignore_errors=True)
         os.makedirs(output_path)
         output_formats = ['Shapefile','NetCDF','Trackline']
-        
+
         cache_path = os.path.join(self.cache_path, "kayak_island.nc")
         model.run("http://thredds.axiomalaska.com/thredds/dodsC/PWS_L1_FCST.nc", bathy=self.bathy_file, cache=cache_path, output_path=output_path, output_formats=output_formats)
-        
+
     def test_sheep_bay(self):
         self.log.logger.info("**************************************")
         self.log.logger.info("Running: Sheep Bay")
@@ -299,7 +299,7 @@ class ModelControllerTest(unittest.TestCase):
         shutil.rmtree(output_path, ignore_errors=True)
         os.makedirs(output_path)
         output_formats = ['Shapefile','NetCDF','Trackline']
-        
+
         cache_path = os.path.join(self.cache_path, "sheep_bay.nc")
         model.run("http://thredds.axiomalaska.com/thredds/dodsC/PWS_L2_FCST.nc", bathy=self.bathy_file, cache=cache_path, output_path=output_path, output_formats=output_formats)
     """
