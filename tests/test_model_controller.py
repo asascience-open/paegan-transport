@@ -331,3 +331,28 @@ class ModelControllerTest(unittest.TestCase):
 
         cache_path = os.path.join(self.cache_path, "test_diel_migration.nc")
         model.run("http://thredds.axiomalaska.com/thredds/dodsC/PWS_DAS.nc", bathy=self.bathy_file, cache=cache_path, output_path=output_path, output_formats=output_formats)
+
+    def test_PWS_L0(self):
+        self.log.logger.info("**************************************")
+        self.log.logger.info("Running: PWS_L0")
+
+        # 1 days
+        num_steps = 24
+
+        num_particles = 4
+
+        time_step = 3600
+
+        models = [Transport(horizDisp=1.0, vertDisp=0.5)]
+
+        start_time = datetime(2011, 2, 1, 06, tzinfo=pytz.utc)
+
+        start_lat = 50.989393258377746
+        start_lon = -149.75202941894338
+        depth = -20
+
+        model = ModelController(latitude=start_lat, longitude=start_lon, depth=depth, start=start_time, step=time_step, nstep=num_steps, npart=num_particles, models=models, use_bathymetry=True, use_shoreline=True,
+            time_chunk=10, horiz_chunk=4, time_method='interp')
+
+        cache_path = os.path.join(self.cache_path, "pwsl0.nc")
+        model.run("http://thredds.axiomalaska.com/thredds/dodsC/PWS_L0_FCST.nc", bathy=self.bathy_file, cache=cache_path)

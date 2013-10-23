@@ -334,18 +334,27 @@ class DataController(object):
                             current_inds = np.arange(self.point_get.value[0],self.point_get.value[0] + self.time_size)
                         
                         # Get data from remote dataset and add
-                        # to local cache  
+                        # to local cache.
+                        # Try 20 times on the first attempt
+                        current_attempt = 1
+                        max_attempts = 20
                         while True:
                             try:
+                                assert current_attempt <= max_attempts
                                 self.get_remote_data(localvars, remotevars, current_inds, shape)
+                            except AssertionError:
+                                raise
                             except:
-                                logger.warn("DataController failed to get remote data.  Trying again in 30 seconds")
-                                timer.sleep(30)
+                                logger.warn("DataController failed to get remote data.  Trying again in 20 seconds. %s attemps left." % unicode(max_attempts-current_attempt))
+                                exc_type, exc_value, exc_traceback = sys.exc_info()
+                                logger.warn("Data Access Error: " + repr(traceback.format_exception(exc_type, exc_value, exc_traceback)))
+                                timer.sleep(20)
+                                current_attempt += 1
                             else:
                                 break
-                        
+
                         c += 1
-                    except StandardError:
+                    except (StandardError, AssertionError):
                         logger.error("DataController failed to get data (first request)")
                         raise
                     finally:
