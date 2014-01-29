@@ -49,25 +49,27 @@ class LifeStageTest(unittest.TestCase):
         # RISING:2013-05-13 05:55:35 -04:00
         # SETTING: 2013-05-14 20:05:33 -04:00
 
-        loc4d.time = self.start_time.astimezone(eastern).replace(hour=5, minute=45)
+        # 1 hour before sunrise, the first migration
+        loc4d.time = eastern.localize(datetime(2013, 5, 13,  5, 45))
         assert lifestage.get_active_diel(loc4d) == lifestage.diel[0]
 
-        loc4d.time = self.start_time.astimezone(eastern).replace(hour=6, minute=45)
+        # still working off of the 1 hour before runrise, because we haven't hit 1 hour after
+        loc4d.time = eastern.localize(datetime(2013, 5, 13,  6, 45))
         assert lifestage.get_active_diel(loc4d) == lifestage.diel[0]
 
-        loc4d.time = self.start_time.astimezone(eastern).replace(hour=8, minute=30)
+        loc4d.time = eastern.localize(datetime(2013, 5, 13,  8, 30))
         assert lifestage.get_active_diel(loc4d) == lifestage.diel[1]
 
-        loc4d.time = self.start_time.astimezone(eastern).replace(hour=19, minute=10)
+        loc4d.time = eastern.localize(datetime(2013, 5, 13, 19, 10))
         assert lifestage.get_active_diel(loc4d) == lifestage.diel[2]
 
-        loc4d.time = self.start_time.astimezone(eastern).replace(hour=20, minute=00)
+        loc4d.time = eastern.localize(datetime(2013, 5, 13, 20,  0))
         assert lifestage.get_active_diel(loc4d) == lifestage.diel[2]
 
-        loc4d.time = self.start_time.astimezone(eastern).replace(hour=21, minute=06)
+        loc4d.time = eastern.localize(datetime(2013, 5, 13, 21,  6))
         assert lifestage.get_active_diel(loc4d) == lifestage.diel[3]
 
-        loc4d.time = self.start_time.astimezone(eastern).replace(hour=2, minute=45) + timedelta(hours=24)
+        loc4d.time = eastern.localize(datetime(2013, 5, 14, 02, 45))
         assert lifestage.get_active_diel(loc4d) == lifestage.diel[3]
 
 
