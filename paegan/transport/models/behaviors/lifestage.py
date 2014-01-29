@@ -72,7 +72,7 @@ class LifeStage(BaseModel):
 
         temp = kwargs.get('temperature', None)
         salt = kwargs.get('salinity', None)
-        
+
         logger.debug("Temp: %.4f, Salt: %.4f" %(temp,salt))
 
         # IMPORTANT:
@@ -99,7 +99,7 @@ class LifeStage(BaseModel):
             else:
                 logger.debug("No temperature found for Particle %s at this location and timestep, skipping linear temperature growth and using duration growth" % particle.uid)
                 pass
-                
+
         if do_duration_growth is True:
             growth = modelTimestepDays / self.duration
             particle.grow(growth)

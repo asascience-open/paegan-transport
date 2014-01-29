@@ -1,13 +1,13 @@
 from datetime import timedelta
 import numpy as np
 import pytz
-from pytz import timezone
+
 
 class SunCycles(object):
 
     SETTING = "sunset"
     RISING = "sunrise"
-       
+
     @classmethod
     def cycles(cls, **kwargs):
         """
@@ -45,7 +45,7 @@ class SunCycles(object):
             if "time" not in kwargs:
                 raise ValueError("You must supply a datetime object")
             else:
-                time = kwargs.get("time")   
+                time = kwargs.get("time")
         else:
             lat = kwargs.get("loc").latitude
             lon = kwargs.get("loc").longitude
@@ -69,7 +69,7 @@ class SunCycles(object):
             utc_jd -= 1
         elif comp == -1:
             utc_jd += 1
-        
+
         time = time.replace(hour=0, minute=0, second=0, microsecond=0)
 
         rising_h, rising_m = cls._calc(jd=utc_jd, lat=lat, lon=lon, stage=cls.RISING)
@@ -119,14 +119,14 @@ class SunCycles(object):
         #sun's longitude
         sun_lon = sun_mean_anom + (1.916 * np.sin( np.radians(sun_mean_anom) )) \
                 + (0.02 * np.sin( np.radians(2 * sun_mean_anom) )) + 282.634
-        
+
         if sun_lon > 360:
             sun_lon = sun_lon - 360
         elif sun_lon < 0:
             sun_lon = sun_lon + 360
-            
+
         right_ascension = np.degrees(np.arctan( 0.91764 * np.tan( np.radians(sun_lon) ) )) # sun's right ascension
-        
+
         if right_ascension > 360:
             right_ascension = right_ascension - 360
         elif right_ascension < 0:
@@ -138,11 +138,11 @@ class SunCycles(object):
         raQuad = 90. * np.floor(right_ascension / 90.)
         right_ascension = right_ascension + ( lQuad - raQuad)
         right_ascension = right_ascension / 15. # Convert to hours
-        
+
         # Sun's declination
         sinDecl = 0.39782 * np.sin( np.radians(sun_lon) )
         cosDecl = np.cos( np.arcsin( sinDecl ) )
-        
+
         # Sun's local hour angle
         cosHr = (np.cos( np.radians(zenith) ) - ( sinDecl * np.sin(np.radians(lat)) )) \
                 / ( cosDecl * np.cos( np.radians(lat) ) )
@@ -155,7 +155,7 @@ class SunCycles(object):
             hr = 360 - np.degrees(np.arccos(cosHr))
         elif stage == SunCycles.SETTING:  # Sunset
             hr = np.degrees(np.arccos(cosHr))
-            
+
         hr = hr / 15. # Convert angle to hours
 
         localTime = hr + right_ascension - ( 0.06571 * apx ) - 6.622# local meantime of rise/set
@@ -168,7 +168,7 @@ class SunCycles(object):
             UTtime = UTtime - 24
 
         hour = np.floor(UTtime)
-     
+
         minute = (UTtime - hour) * 60
         if minute == 60:
             hour = hour + 1

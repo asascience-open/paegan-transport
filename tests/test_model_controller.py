@@ -56,7 +56,7 @@ class ModelControllerTest(unittest.TestCase):
 
         cache_path = os.path.join(self.cache_path, "test_run_from_point.nc")
         model.run("http://thredds.axiomalaska.com/thredds/dodsC/PWS_L2_FCST.nc", bathy=self.bathy_file, cache=cache_path)
-
+    """
     def test_run_from_point_with_wfs(self):
         self.log.logger.info("**************************************")
         self.log.logger.info("Running: test_run_from_point_with_wfs")
@@ -154,7 +154,7 @@ class ModelControllerTest(unittest.TestCase):
 
         with raises(DataControllerError):
             model.run("http://asascience.com/thisisnotadataset.nc", bathy=self.bathy_file, cache=cache_path)
-
+    """
     """
     def test_behavior_growth_and_settlement(self):
         self.log.logger.info("**************************************")
@@ -183,7 +183,7 @@ class ModelControllerTest(unittest.TestCase):
         cache_path = os.path.join(self.cache_path, "test_behavior_growth_and_settlement.nc")
         model.run("http://thredds.axiomalaska.com/thredds/dodsC/PWS_L2_FCST.nc", bathy=self.bathy_file, cache=cache_path, output_path=output_path, output_formats=output_formats)
     """
-
+    """
     def test_quick_settlement(self):
         self.log.logger.info("**************************************")
         self.log.logger.info("Running: test_quick_settlement")
@@ -226,7 +226,7 @@ class ModelControllerTest(unittest.TestCase):
 
         cache_path = os.path.join(self.cache_path, "test_timechunk_greater_than_timestep.nc")
         model.run("http://thredds.axiomalaska.com/thredds/dodsC/PWS_L2_FCST.nc", bathy=self.bathy_file, cache=cache_path)
-
+    """
     """
     def test_kayak_island(self):
         self.log.logger.info("**************************************")
@@ -304,6 +304,7 @@ class ModelControllerTest(unittest.TestCase):
         model.run("http://thredds.axiomalaska.com/thredds/dodsC/PWS_L2_FCST.nc", bathy=self.bathy_file, cache=cache_path, output_path=output_path, output_formats=output_formats)
     """
 
+    """
     def test_diel_migration(self):
         self.log.logger.info("**************************************")
         self.log.logger.info("Running: test_diel_migration")
@@ -356,3 +357,4 @@ class ModelControllerTest(unittest.TestCase):
 
         cache_path = os.path.join(self.cache_path, "pwsl0.nc")
         model.run("http://thredds.axiomalaska.com/thredds/dodsC/PWS_L0_FCST.nc", bathy=self.bathy_file, cache=cache_path)
+    """

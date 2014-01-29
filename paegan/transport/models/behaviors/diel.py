@@ -8,6 +8,7 @@ from paegan.transport.models.base_model import BaseModel
 
 from paegan.logger import logger
 
+
 class Diel(BaseModel):
 
     PATTERN_CYCLE        = "cycles"
@@ -20,7 +21,7 @@ class Diel(BaseModel):
     HOURS_MINUS = "-"
 
     def __init__(self, **kwargs):
-        
+
         if 'json' in kwargs or 'data' in kwargs:
             data = {}
             try:
@@ -145,7 +146,7 @@ class Diel(BaseModel):
         if particle.location.depth < self.max_depth:
             logger.debug("DIEL: %s - Moving UP to desired depth from %f" % (self.logstring(), particle.location.depth))
 
-            # If we are going to overshoot the desired minimum depth, 
+            # If we are going to overshoot the desired minimum depth,
             # calculate a new w to land in the middle of the range.
             overshoot_distance = abs(particle.location.depth - self.min_depth)
             if overshoot_distance < abs(vertical_potential):
@@ -165,7 +166,7 @@ class Diel(BaseModel):
         if particle.location.depth > self.min_depth:
             logger.debug("DIEL: %s - Moving DOWN to desired depth from %f" % (self.logstring(), particle.location.depth))
 
-            # If we are going to overshoot the desired maximum depth, 
+            # If we are going to overshoot the desired maximum depth,
             # calculate a new w to land in the middle of the range.
             overshoot_distance = abs(particle.location.depth - self.max_depth)
             if overshoot_distance < abs(vertical_potential):

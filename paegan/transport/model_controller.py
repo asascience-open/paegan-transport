@@ -31,7 +31,7 @@ class ModelController(object):
     """
     def __init__(self, **kwargs):
 
-        """ 
+        """
             Mandatory named arguments:
             * geometry (Shapely Geometry Object) no default
             * depth (meters) default 0
@@ -80,7 +80,7 @@ class ModelController(object):
 
         # The model timesteps in datetime objects
         self.datetimes = []
-        
+
         # Inerchangeables
         if "geometry" in kwargs:
             self.geometry = kwargs.pop('geometry')
@@ -155,14 +155,14 @@ class ModelController(object):
             else:
                 return None
 
-        uname = getname('eastward_sea_water_velocity') 
-        vname = getname('northward_sea_water_velocity') 
+        uname = getname('eastward_sea_water_velocity')
+        vname = getname('northward_sea_water_velocity')
         wname = getname('upward_sea_water_velocity')
-        temp_name = getname('sea_water_temperature') 
+        temp_name = getname('sea_water_temperature')
         salt_name = getname('sea_water_salinity')
 
-        coords = dataset.get_coord_names(uname) 
-        xname = coords['xname'] 
+        coords = dataset.get_coord_names(uname)
+        xname = coords['xname']
         yname = coords['yname']
         zname = coords['zname']
         tname = coords['tname']
@@ -244,7 +244,7 @@ class ModelController(object):
             self.particles.append(p)
 
         # This is where it makes sense to implement the multiprocessing
-        # looping for particles and models. Can handle each particle in 
+        # looping for particles and models. Can handle each particle in
         # parallel probably.
         #
         # Get the number of cores (may take some tuning) and create that
@@ -266,12 +266,12 @@ class ModelController(object):
         has_data_request_lock = mgr.Value('int',-1)
 
         nproc_lock = mgr.Lock()
-        
+
         # Create the task queue for all of the particles and the DataController
         tasks = multiprocessing.JoinableQueue(number_of_tasks)
         # Create the result queue for all of the particles and the DataController
         results = mgr.Queue(number_of_tasks)
-        
+
         # Create the shared state objects
         get_data = mgr.Value('bool', True)
         # Number of tasks
@@ -291,7 +291,7 @@ class ModelController(object):
 
         point_get = mgr.Value('list', [0, 0, 0])
         active = mgr.Value('bool', True)
-        
+
         logger.progress((3, "Initializing and caching hydro model's grid"))
         try:
             ds = CommonDataset.open(hydrodataset)
@@ -313,9 +313,9 @@ class ModelController(object):
             raise DataControllerError("Inaccessible DAP endpoint: %s" % hydrodataset)
 
 
-        # Add data controller to the queue first so that it 
+        # Add data controller to the queue first so that it
         # can get the initial data and is not blocked
-        
+
         logger.debug('Starting DataController')
         logger.progress((4, "Starting processes"))
         data_controller = parallel.DataController(hydrodataset, common_variables, n_run, get_data, write_lock, has_write_lock, read_lock, read_count,
@@ -327,7 +327,7 @@ class ModelController(object):
         # Create DataController worker
         data_controller_process = parallel.Consumer(tasks, results, n_run, nproc_lock, active, get_data, name="DataController")
         data_controller_process.start()
-        
+
         logger.debug('Adding %i particles as tasks' % len(self.particles))
         for part in self.particles:
             forcing = parallel.ForceParticle(part,
@@ -400,7 +400,7 @@ class ModelController(object):
                         np = parallel.Consumer(tasks, results, n_run, nproc_lock, active, get_data, name=p.name)
                         new_procs.append(np)
                         old_procs.append(p)
-                        
+
                         # Release any locks the PID had
                         if p.pid in has_read_lock:
                             with read_lock:
@@ -413,14 +413,14 @@ class ModelController(object):
                                 data_request_lock.release()
                             except:
                                 pass
-                            
+
                         if has_write_lock.value == p.pid:
                             has_write_lock.value = -1
                             try:
                                 write_lock.release()
                             except:
                                 pass
-                            
+
 
                 for p in old_procs:
                     try:
@@ -432,7 +432,7 @@ class ModelController(object):
                     procs.append(p)
                     logger.warn("Started a new consumer (%s) to replace a zombie consumer" % p.name)
                     p.start()
-                
+
             else:
                 # We got one.
                 retrieved += 1
@@ -464,7 +464,7 @@ class ModelController(object):
                     logger.info(str(tempres))
 
                 logger.info("Retrieved %i/%i results" % (int(retrieved),number_of_tasks))
-        
+
         if len(return_particles) != len(self.particles):
             logger.warn("Some particles failed and are not included in the output")
 
@@ -484,7 +484,7 @@ class ModelController(object):
                     # Process is hanging, kill it.
                     logger.info("Terminating %s forcefully.  This should have exited itself." % w.name)
                     w.terminate()
-                    
+
         logger.info('Workers complete')
 
         self.particles = return_particles
@@ -520,9 +520,9 @@ class ModelController(object):
                             except:
                                 logger.error("Failed to export to: %s" % format)
                     else:
-                        logger.warn('The output_formats parameter should be a list, not saving any output!')  
+                        logger.warn('The output_formats parameter should be a list, not saving any output!')
                 else:
-                    logger.warn('No output path defined, not saving any output!')  
+                    logger.warn('No output path defined, not saving any output!')
             else:
                 logger.warn('No output format defined, not saving any output!')
         else:
@@ -534,14 +534,14 @@ class ModelController(object):
 
         logger.progress((99, "Model Run Complete"))
         return
-    
+
     def export(self, folder_path, format=None):
         """
-            General purpose export method, gets file type 
+            General purpose export method, gets file type
             from filepath extension
-            
+
             Valid output formats currently are:
-                Trackline: trackline or trkl or *.trkl                
+                Trackline: trackline or trkl or *.trkl
                 Shapefile: shapefile or shape or shp or *.shp
                 NetCDF:    netcdf or nc or *.nc
         """
