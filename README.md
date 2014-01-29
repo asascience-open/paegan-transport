@@ -49,10 +49,11 @@ pip install pytest
 python -m pytest -s
 ```
 
-If you want to run the model_controller or shoreline tests, you will need to edit the test files with paths appropriate for your system.
+If you want to run the model_controller or shoreline tests, you will need to edit the test files with paths appropriate for your system. Default is `/data/lm` with `/data/lm/bathy` and `/data/lm/shore` filled in with the files below.
 
 Some tests require large files that are not in source control.  You can get them here:
 * ETOPO1 Global Bathymetry ([ETOPO1_Bed_g_gmt4.grd](http://s3.amazonaws.com/paegan/resources/ETOPO1_Bed_g_gmt4.grd))
+* Shoreline files (unzip) ([shore.zip](https://s3.amazonaws.com/paegan/resources/shore.zip))
 
 
 Contributors
