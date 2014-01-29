@@ -215,7 +215,12 @@ class ModelController(object):
             default_cache_dir = os.path.join(os.path.dirname(__file__), "_cache")
             temp_name = AsaRandom.filename(prefix=str(datetime.now().microsecond), suffix=".nc")
             self.cache_path = os.path.join(default_cache_dir, temp_name)
-        
+
+        # Be sure the cache directory exists
+        if not os.path.exists(os.path.dirname(self.cache_path)):
+            logger.info("Creating cache directory: %s" % self.cache_path)
+            os.makedirs(os.path.dirname(self.cache_path))
+
         logger.progress((1, "Setting up particle start locations"))
         point_locations = []
         if isinstance(self.geometry, Point):
