@@ -48,11 +48,9 @@ class Consumer(multiprocessing.Process):
                 answer = (None, None)
                 try:
                     answer = (1, next_task(self.name, self.active))
-                except Exception as detail:
+                except Exception:
                     exc_type, exc_value, exc_traceback = sys.exc_info()
-                    logger.error("Disabling Error: " +\
-                                 repr(traceback.format_exception(exc_type, exc_value,
-                                              exc_traceback)))
+                    logger.exception("Disabling Error")
                     if isinstance(next_task, DataController):
                         answer = (-2, "DataController")
                         # Tell the particles that the DataController is releasing file
@@ -97,7 +95,6 @@ class DataController(object):
         self.time_size = time_chunk
         self.horiz_size = horiz_chunk
         self.point_get = point_get
-        self.low_memory = kwargs.get("low_memory", False)
         self.start_time = start_time
         self.times = times
         self.start = start
@@ -140,42 +137,19 @@ class DataController(object):
 
         # Update domain variable for where we will add data
         domain = self.local.variables['domain']
-        if self.low_memory:
-            for z in range(shape[1]):
-                if z + 1 > shape[1] - 1:
-                    z_1 = shape[1]
-                else:
-                    z_1 = z + 1
-                if len(shape) == 4:
-                    domain[time:time_1, z:z_1, y:y_1, x:x_1] = np.ones((time_1-time, z_1-z, y_1-y, x_1-x))
-                elif len(shape) == 3:
-                    if z == self.inds[0]:
-                        domain[time:time_1, y:y_1, x:x_1] = np.ones((time_1-time, y_1-y, x_1-x))
-        else:
-            if len(shape) == 4:
-                domain[inds[0]:inds[-1]+1, 0:shape[1], y:y_1, x:x_1] = np.ones((inds[-1]+1-inds[0], shape[1], y_1-y, x_1-x))
-            elif len(shape) == 3:
-                domain[inds[0]:inds[-1]+1, y:y_1, x:x_1] = np.ones((inds[-1]+1-inds[0], y_1-y, x_1-x))
+
+        if len(shape) == 4:
+            domain[inds[0]:inds[-1]+1, 0:shape[1], y:y_1, x:x_1] = np.ones((inds[-1]+1-inds[0], shape[1], y_1-y, x_1-x))
+        elif len(shape) == 3:
+            domain[inds[0]:inds[-1]+1, y:y_1, x:x_1] = np.ones((inds[-1]+1-inds[0], y_1-y, x_1-x))
 
         # Update the local variables with remote data
         logger.debug("Filling cache with: Time - %s:%s, Lat - %s:%s, Lon - %s:%s" % (str(inds[0]), str(inds[-1]+1), str(y), str(y_1), str(x), str(x_1)))
         for local, remote in zip(localvars, remotevars):
-            if self.low_memory:
-                for z in range(shape[1]):
-                    if z + 1 > shape[1] - 1:
-                        z_1 = shape[1]
-                    else:
-                        z_1 = z + 1
-                    if len(shape) == 4:
-                        local[time:time_1, z:z_1, y:y_1, x:x_1] = remote[time:time_1,  z:z_1, y:y_1, x:x_1]
-                    else:
-                        if z == 0:
-                            local[time:time_1, y:y_1, x:x_1] = remote[time:time_1, y:y_1, x:x_1]
+            if len(shape) == 4:
+                local[inds[0]:inds[-1]+1, 0:shape[1], y:y_1, x:x_1] = remote[inds[0]:inds[-1]+1,  0:shape[1], y:y_1, x:x_1]
             else:
-                if len(shape) == 4:
-                    local[inds[0]:inds[-1]+1, 0:shape[1], y:y_1, x:x_1] = remote[inds[0]:inds[-1]+1,  0:shape[1], y:y_1, x:x_1]
-                else:
-                    local[inds[0]:inds[-1]+1, y:y_1, x:x_1] = remote[inds[0]:inds[-1]+1, y:y_1, x:x_1]
+                local[inds[0]:inds[-1]+1, y:y_1, x:x_1] = remote[inds[0]:inds[-1]+1, y:y_1, x:x_1]
 
     def __call__(self, proc, active):
         c = 0
@@ -819,8 +793,8 @@ class ForceParticle(object):
         if self.usebathy is True:
             try:
                 self._bathymetry = Bathymetry(file=self.bathy)
-            except Exception, e:
-                logger.exception("Could not load Bathymetry file: %s, using no Bathymetry for this run!" % self.bathy, e)
+            except Exception:
+                logger.exception("Could not load Bathymetry file: %s, using no Bathymetry for this run!" % self.bathy)
                 self.usebathy = False
 
         self._shoreline = None

@@ -204,7 +204,6 @@ class ModelController(object):
 
         time_chunk = self._time_chunk
         horiz_chunk = self._horiz_chunk
-        low_memory = kwargs.get("low_memory", False)
 
         # Should we remove the cache file at the end of the run?
         remove_cache = kwargs.get("remove_cache", True)
@@ -320,11 +319,9 @@ class ModelController(object):
             pickle.dump(timevar, f)
             f.close()
             ds.closenc()
-        except AssertionError, e:
-            logger.warn("Could not locate variables needed to run model: %s" % unicode(common_variables))
+        except AssertionError:
+            logger.exception("Could not locate variables needed to run model: %s" % unicode(common_variables))
             raise DataControllerError("A required data variable was not found in %s" % hydrodataset)
-
-
 
         # Add data controller to the queue first so that it
         # can get the initial data and is not blocked
@@ -334,7 +331,6 @@ class ModelController(object):
         data_controller = parallel.DataController(hydrodataset, common_variables, n_run, get_data, write_lock, has_write_lock, read_lock, read_count,
                                                   time_chunk, horiz_chunk, times,
                                                   self.start, point_get, self.reference_location,
-                                                  low_memory=low_memory,
                                                   cache=self.cache_path)
         tasks.put(data_controller)
         # Create DataController worker
