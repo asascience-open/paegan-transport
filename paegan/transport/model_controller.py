@@ -261,43 +261,52 @@ class ModelController(object):
         # We need a process for each particle and one for the data controller
         nproc = min(number_of_tasks, nproc)
 
-        # When a particle requests data
-        data_request_lock = mgr.Lock()
-        # PID of process with lock
-        has_data_request_lock = mgr.Value('int',-1)
-
-        nproc_lock = mgr.Lock()
-
         # Create the task queue for all of the particles and the DataController
         tasks = multiprocessing.JoinableQueue(number_of_tasks)
         # Create the result queue for all of the particles and the DataController
         results = mgr.Queue(number_of_tasks)
 
-        # Create the shared state objects
-        get_data = mgr.Value('bool', True)
-        # Number of tasks
+        # Number of tasks that we need to run.  This is decremented everytime something
+        # completes.
         n_run = mgr.Value('int', number_of_tasks)
-        updating = mgr.Value('bool', False)
+        # The lock that controls access to the 'n_run' variable
+        nproc_lock = mgr.Lock()
 
-        # When something is reading from cache file
+        # Create the shared state objects
+
+        # This tracks if the system is 'alive'.  Most looping whiles will check this
+        # and break out if it is False.  This is True until something goes very wrong.
+        active = mgr.Value('bool', True)
+
+        # Particles use this to tell the Data Controller to "get_data".
+        # The DataController sets this to False when it is done writing to the cache file.
+        # Particles will wait for this to be False before reading from the cache file.
+        get_data = mgr.Value('bool', True)
+        # Particles use this to tell the DataContoller which indices to 'get_data' for
+        point_get = mgr.Value('list', [0, 0, 0])
+
+        # This locks access to the 'has_data_request_lock' value
+        data_request_lock = mgr.Lock()
+        # This tracks which Particle PID is asking the DataController for data
+        has_data_request_lock = mgr.Value('int', -1)
+
+        # The lock that controls access to modifying 'has_read_lock' and 'read_count'
         read_lock = mgr.Lock()
-        # list of PIDs that are reading
+        # List of Particle PIDs that are reading from the cache
         has_read_lock = mgr.list()
+        # The number of Particles that are reading from the cache
         read_count = mgr.Value('int', 0)
 
         # When something is writing to the cache file
         write_lock = mgr.Lock()
         # PID of process with lock
-        has_write_lock = mgr.Value('int',-1)
-
-        point_get = mgr.Value('list', [0, 0, 0])
-        active = mgr.Value('bool', True)
+        has_write_lock = mgr.Value('int', -1)
 
         logger.progress((3, "Initializing and caching hydro model's grid"))
         try:
             ds = CommonDataset.open(hydrodataset)
-        except Exception, e:
-            logger.exception("Failed to access dataset %s" % hydrodataset, e)
+        except Exception:
+            logger.exception("Failed to access dataset %s" % hydrodataset)
             raise DataControllerError("Inaccessible Dataset: %s" % hydrodataset)
 
         # Query the dataset for common variable names
