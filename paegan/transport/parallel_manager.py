@@ -575,16 +575,18 @@ class ForceParticle(object):
                             timer.sleep(4)
                             pass
 
-                    # get the next time index data
-                    self.point_get.value = [indices[0] + 2, indices[-2], indices[-1]]
-                    # Request that the data controller update the cache
-                    self.get_data.value = True
-                    # Wait until the data controller is done
-                    if self.active.value == True:
-                        while self.get_data.value == True:
-                            logger.debug("Waiting for DataController to update cache with the NEXT time index")
-                            timer.sleep(4)
-                            pass
+                    # Do we still need to get the next timestep?
+                    if self.need_data(i+1):
+                        # get the next time index data
+                        self.point_get.value = [indices[0] + 2, indices[-2], indices[-1]]
+                        # Request that the data controller update the cache
+                        self.get_data.value = True
+                        # Wait until the data controller is done
+                        if self.active.value is True:
+                            while self.get_data.value is True:
+                                logger.debug("Waiting for DataController to update cache with the NEXT time index")
+                                timer.sleep(2)
+                                pass
             except StandardError:
                 logger.warn("Particle failed to request data correctly")
                 raise
