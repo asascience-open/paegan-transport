@@ -148,15 +148,17 @@ class ModelController(object):
 
     def get_common_variables_from_dataset(self, dataset):
 
-        def getname(name):
-            nm = dataset.get_varname_from_stdname(name)
-            if len(nm) > 0:
-                return nm[0]
-            else:
-                return None
+        def getname(names):
+            for n in names:
+                nm = dataset.get_varname_from_stdname(n)
+                if len(nm) > 0:
+                    return nm[0]
+                else:
+                    continue
+            return None
 
-        uname = getname('eastward_sea_water_velocity')
-        vname = getname('northward_sea_water_velocity')
+        uname = getname(['eastward_sea_water_velocity', 'eastward_current'])
+        vname = getname(['northward_sea_water_velocity', 'northward_current'])
         wname = getname('upward_sea_water_velocity')
         temp_name = getname('sea_water_temperature')
         salt_name = getname('sea_water_salinity')
@@ -295,10 +297,20 @@ class ModelController(object):
         logger.progress((3, "Initializing and caching hydro model's grid"))
         try:
             ds = CommonDataset.open(hydrodataset)
-            # Query the dataset for common variable names
-            # and the time variable.
-            logger.debug("Retrieving variable information from dataset")
-            common_variables = self.get_common_variables_from_dataset(ds)
+        except Exception, e:
+            logger.exception("Failed to access dataset %s" % hydrodataset, e)
+            raise DataControllerError("Inaccessible Dataset: %s" % hydrodataset)
+
+        # Query the dataset for common variable names
+        # and the time variable.
+        logger.debug("Retrieving variable information from dataset")
+        common_variables = self.get_common_variables_from_dataset(ds)
+
+        try:
+            assert common_variables.get("u") in ds._current_variables
+            assert common_variables.get("v") in ds._current_variables
+            assert common_variables.get("x") in ds._current_variables
+            assert common_variables.get("y") in ds._current_variables
 
             logger.debug("Pickling time variable to disk for particles")
             timevar = ds.gettimevar(common_variables.get("u"))
@@ -308,9 +320,10 @@ class ModelController(object):
             pickle.dump(timevar, f)
             f.close()
             ds.closenc()
-        except:
-            logger.warn("Failed to access remote dataset %s" % hydrodataset)
-            raise DataControllerError("Inaccessible DAP endpoint: %s" % hydrodataset)
+        except AssertionError, e:
+            logger.warn("Could not locate variables needed to run model: %s" % unicode(common_variables))
+            raise DataControllerError("A required data variable was not found in %s" % hydrodataset)
+
 
 
         # Add data controller to the queue first so that it
