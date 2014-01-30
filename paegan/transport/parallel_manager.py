@@ -816,8 +816,12 @@ class ForceParticle(object):
 
         self.active = active
 
-        if self.usebathy == True:
-            self._bathymetry = Bathymetry(file=self.bathy)
+        if self.usebathy is True:
+            try:
+                self._bathymetry = Bathymetry(file=self.bathy)
+            except Exception, e:
+                logger.exception("Could not load Bathymetry file: %s, using no Bathymetry for this run!" % self.bathy, e)
+                self.usebathy = False
 
         self._shoreline = None
         if self.useshore == True:
