@@ -1,26 +1,26 @@
-import unittest
-import numpy as np
-import netCDF4
-from paegan.transport.models.transport import Transport
-from paegan.transport.particles.particle import Particle
-from paegan.location4d import Location4D
-from paegan.utils.asarandom import AsaRandom
-from paegan.transport.utils.asatransport import AsaTransport
-from paegan.transport.shoreline import Shoreline
-from paegan.transport.bathymetry import Bathymetry
-from multiprocessing import Value
-from paegan.cdm.dataset import CommonDataset
-from paegan.cdm.timevar import date2num, num2date
-import os, sys
+import os
+import sys
 import time as timer
-import random
 import math
 import traceback
 import Queue
 import multiprocessing
 import cPickle as pickle
 
+import numpy as np
+import netCDF4
+
+from paegan.location4d import Location4D
+
+from paegan.transport.utils.asatransport import AsaTransport
+from paegan.transport.shoreline import Shoreline
+from paegan.transport.bathymetry import Bathymetry
+
+from paegan.cdm.dataset import CommonDataset
+from paegan.cdm.timevar import date2num
+
 from paegan.logger import logger
+
 
 class Consumer(multiprocessing.Process):
     def __init__(self, task_queue, result_queue, n_run, nproc_lock, active, get_data, **kwargs):
@@ -91,7 +91,7 @@ class DataController(object):
         self.has_write_lock = has_write_lock
         self.read_lock = read_lock
         self.read_count = read_count
-        self.inds = None#np.arange(init_size+1)
+        self.inds = None  # np.arange(init_size+1)
         self.time_size = time_chunk
         self.horiz_size = horiz_chunk
         self.point_get = point_get
@@ -155,7 +155,6 @@ class DataController(object):
         c = 0
 
         self.dataset = CommonDataset.open(self.url)
-        self.proc = proc
         self.remote = self.dataset.nc
         cachepath = self.cache_path
 
@@ -178,10 +177,9 @@ class DataController(object):
         # While there is at least 1 particle still running,
         # stay alive, if not break
         while self.n_run.value > 1:
-            logger.debug("Particles are still running, waiting for them to request data...")
-            timer.sleep(2)
+
             # If particle asks for data, do the following
-            if self.get_data.value == True:
+            if self.get_data.value is True:
                 logger.debug("Particle asked for data!")
 
                 # Wait for particles to get out
@@ -192,7 +190,7 @@ class DataController(object):
                     if self.read_count.value > 0:
                         logger.debug("Waiting for write lock on cache file (particles must stop reading)...")
                         self.read_lock.release()
-                        timer.sleep(4)
+                        timer.sleep(2)
                     else:
                         break
 
@@ -250,17 +248,17 @@ class DataController(object):
                         v.coordinates = coordinates
                         u.coordinates = coordinates
 
-                        localvars = [u, v,]
+                        localvars = [u, v, ]
                         remotevars = [self.remote.variables[self.uname], self.remote.variables[self.vname]]
 
                         # Create local w variable
-                        if self.wname != None:
+                        if self.wname is not None:
                             w = self.local.createVariable('w', 'f', dimensions, zlib=False, fill_value=fill)
                             w.coordinates = coordinates
                             localvars.append(w)
                             remotevars.append(self.remote.variables[self.wname])
 
-                        if self.temp_name != None and self.salt_name != None:
+                        if self.temp_name is not None and self.salt_name is not None:
                             # Create local temp and salt vars
                             temp = self.local.createVariable('temp', 'f', dimensions, zlib=False, fill_value=fill)
                             salt = self.local.createVariable('salt', 'f', dimensions, zlib=False, fill_value=fill)
@@ -284,28 +282,28 @@ class DataController(object):
                             lat[:] = self.remote.variables[self.yname][:]
 
                         # Create local z variable
-                        if self.zname != None:
+                        if self.zname is not None:
                             if self.remote.variables[self.zname].ndim == 4:
-                                z = self.local.createVariable('z', 'f', ("time","level","y","x"), zlib=False)
+                                z = self.local.createVariable('z', 'f', ("time", "level", "y", "x"), zlib=False)
                                 remotez = self.remote.variables[self.zname]
                                 localvars.append(z)
                                 remotevars.append(remotez)
                             elif self.remote.variables[self.zname].ndim == 3:
-                                z = self.local.createVariable('z', 'f', ("level","y","x"), zlib=False)
+                                z = self.local.createVariable('z', 'f', ("level", "y", "x"), zlib=False)
                                 z[:] = self.remote.variables[self.zname][:, :, :]
-                            elif self.remote.variables[self.zname].ndim ==1:
+                            elif self.remote.variables[self.zname].ndim == 1:
                                 z = self.local.createVariable('z', 'f', ("level",), zlib=False)
                                 z[:] = self.remote.variables[self.zname][:]
 
                         # Create local time variable
                         time = self.local.createVariable('time', 'f8', ("time",), zlib=False)
-                        if self.tname != None:
+                        if self.tname is not None:
                             time[:] = self.remote.variables[self.tname][self.inds]
 
                         if self.point_get.value[0]+self.time_size > np.max(self.inds):
                             current_inds = np.arange(self.point_get.value[0], np.max(self.inds)+1)
                         else:
-                            current_inds = np.arange(self.point_get.value[0],self.point_get.value[0] + self.time_size)
+                            current_inds = np.arange(self.point_get.value[0], self.point_get.value[0] + self.time_size)
 
                         # Get data from remote dataset and add
                         # to local cache.
@@ -357,7 +355,7 @@ class DataController(object):
                         # the data updater
                         localvars = [u, v, ]
                         remotevars = [remoteu, remotev, ]
-                        if self.salt_name != None and self.temp_name != None:
+                        if self.salt_name is not None and self.temp_name is not None:
                             salt = self.local.variables['salt']
                             temp = self.local.variables['temp']
                             remotesalt = self.remote.variables[self.salt_name]
@@ -366,25 +364,25 @@ class DataController(object):
                             localvars.append(temp)
                             remotevars.append(remotesalt)
                             remotevars.append(remotetemp)
-                        if self.wname != None:
+                        if self.wname is not None:
                             w = self.local.variables['w']
                             remotew = self.remote.variables[self.wname]
                             localvars.append(w)
                             remotevars.append(remotew)
-                        if self.zname != None:
+                        if self.zname is not None:
                             remotez = self.remote.variables[self.zname]
                             if remotez.ndim == 4:
                                 z = self.local.variables['z']
                                 localvars.append(z)
                                 remotevars.append(remotez)
-                        if self.tname != None:
-                            remotetime = self.remote.variables[self.tname]
+                        if self.tname is not None:
+                            # remotetime = self.remote.variables[self.tname]
                             time[self.inds] = self.remote.variables[self.inds]
 
                         if self.point_get.value[0]+self.time_size > np.max(self.inds):
                             current_inds = np.arange(self.point_get.value[0], np.max(self.inds)+1)
                         else:
-                            current_inds = np.arange(self.point_get.value[0],self.point_get.value[0] + self.time_size)
+                            current_inds = np.arange(self.point_get.value[0], self.point_get.value[0] + self.time_size)
 
                         # Get data from remote dataset and add
                         # to local cache
@@ -410,7 +408,8 @@ class DataController(object):
                         self.read_lock.release()
                         logger.debug("Done updating cache file, closing file, and releasing locks")
             else:
-                pass
+                logger.debug("Particles are still running, waiting for them to request data...")
+                timer.sleep(2)
 
         self.dataset.closenc()
 
@@ -418,8 +417,7 @@ class DataController(object):
 
 
 class ForceParticle(object):
-    from paegan.transport.shoreline import Shoreline
-    from paegan.transport.bathymetry import Bathymetry
+
     def __str__(self):
         return self.part.__str__()
 
@@ -434,11 +432,11 @@ class ForceParticle(object):
             other particles and data controller for local
             cache updates
         """
-        assert cache != None
+        assert cache is not None
         self.cache_path = cache
         self.bathy = bathy
         self.common_variables = common_variables
-        self.localpath =  self.cache_path
+        self.localpath = self.cache_path
         self.release_location_centroid = release_location_centroid
         self.part = part
         self.times = times
@@ -514,7 +512,7 @@ class ForceParticle(object):
                 self.read_count.value -= 1
                 self.has_read_lock.remove(os.getpid())
 
-        return need # return true if need data or false if dont
+        return need  # return true if need data or false if dont
 
     def linterp(self, setx, sety, x):
         """
@@ -534,10 +532,10 @@ class ForceParticle(object):
             Uses linear interpolation bewtween timesteps to
             get u,v,w,temp,salt
         """
-        if self.active.value == True:
-            while self.get_data.value == True:
+        if self.active.value is True:
+            while self.get_data.value is True:
                 logger.debug("Waiting for DataController to release cache file so I can read from it...")
-                timer.sleep(4)
+                timer.sleep(2)
                 pass
 
         if self.need_data(i+1):
@@ -569,10 +567,10 @@ class ForceParticle(object):
                     # Request that the data controller update the cache
                     self.get_data.value = True
                     # Wait until the data controller is done
-                    if self.active.value == True:
-                        while self.get_data.value == True:
+                    if self.active.value is True:
+                        while self.get_data.value is True:
                             logger.debug("Waiting for DataController to update cache with the CURRENT time index")
-                            timer.sleep(4)
+                            timer.sleep(2)
                             pass
 
                     # Do we still need to get the next timestep?
@@ -595,15 +593,16 @@ class ForceParticle(object):
                 self.has_data_request_lock.value = -1
                 self.data_request_lock.release()
 
-
         # Tell the DataController that we are going to be reading from the file
         with self.read_lock:
             self.read_count.value += 1
             self.has_read_lock.append(os.getpid())
 
         try:
-            # Open netcdf file on disk from commondataset
+            # Open the Cache netCDF file on disk
+            logger.debug("Opening cache datasets")
             self.dataset.opennc()
+            logger.debug("Done opening cache dataset")
 
             # Grab data at time index closest to particle location
             u = [np.mean(np.mean(self.dataset.get_values('u', timeinds=[np.asarray([i])], point=self.part.location ))),
@@ -613,11 +612,11 @@ class ForceParticle(object):
             # if there is vertical velocity inthe dataset, get it
             if 'w' in self.dataset.nc.variables:
                 w = [np.mean(np.mean(self.dataset.get_values('w', timeinds=[np.asarray([i])], point=self.part.location ))),
-                    np.mean(np.mean(self.dataset.get_values('w', timeinds=[np.asarray([i+1])], point=self.part.location )))]
+                     np.mean(np.mean(self.dataset.get_values('w', timeinds=[np.asarray([i+1])], point=self.part.location )))]
             else:
                 w = [0.0, 0.0]
             # If there is salt and temp in the dataset, get it
-            if self.temp_name != None and self.salt_name != None:
+            if self.temp_name is not None and self.salt_name is not None:
                 temp = [np.mean(np.mean(self.dataset.get_values('temp', timeinds=[np.asarray([i])], point=self.part.location ))),
                         np.mean(np.mean(self.dataset.get_values('temp', timeinds=[np.asarray([i+1])], point=self.part.location )))]
                 salt = [np.mean(np.mean(self.dataset.get_values('salt', timeinds=[np.asarray([i])], point=self.part.location ))),
@@ -639,7 +638,7 @@ class ForceParticle(object):
                 else:
                     w = [0.0, 0.0]
 
-                if self.temp_name != None and self.salt_name != None:
+                if self.temp_name is not None and self.salt_name is not None:
                     temparray1 = self.dataset.get_values('temp', timeinds=[np.asarray([i])], point=self.part.location, num=2)
                     saltarray1 = self.dataset.get_values('salt', timeinds=[np.asarray([i])], point=self.part.location, num=2)
                     temparray2 = self.dataset.get_values('temp', timeinds=[np.asarray([i+1])], point=self.part.location, num=2)
@@ -655,7 +654,7 @@ class ForceParticle(object):
             u = self.linterp(timevar[i:i+2], u, currenttime)
             v = self.linterp(timevar[i:i+2], v, currenttime)
             w = self.linterp(timevar[i:i+2], w, currenttime)
-            if self.temp_name != None and self.salt_name != None:
+            if self.temp_name is not None and self.salt_name is not None:
                 temp = self.linterp(timevar[i:i+2], temp, currenttime)
                 salt = self.linterp(timevar[i:i+2], salt, currenttime)
 
@@ -663,8 +662,6 @@ class ForceParticle(object):
                 temp = np.nan
             if self.salt_name is None:
                 salt = np.nan
-
-            #logger.info(self.dataset.get_xyind_from_point('u', self.part.location, num=1))
 
         except StandardError:
             logger.error("Error in data_interp method on ForceParticle")
@@ -682,10 +679,10 @@ class ForceParticle(object):
             Method to streamline request for data from cache,
             Uses nearest time to get u,v,w,temp,salt
         """
-        if self.active.value == True:
-            while self.get_data.value == True:
+        if self.active.value is True:
+            while self.get_data.value is True:
                 logger.debug("Waiting for DataController to release cache file so I can read from it...")
-                timer.sleep(4)
+                timer.sleep(2)
                 pass
 
         if self.need_data(i):
@@ -715,10 +712,10 @@ class ForceParticle(object):
                     # DATA CONTOLLER STARTS
                     self.get_data.value = True
                     # Wait until the data controller is done
-                    if self.active.value == True:
-                        while self.get_data.value == True:
+                    if self.active.value is True:
+                        while self.get_data.value is True:
                             logger.debug("Waiting for DataController to update cache...")
-                            timer.sleep(4)
+                            timer.sleep(2)
                             pass
             except StandardError:
                 raise
@@ -744,7 +741,7 @@ class ForceParticle(object):
             else:
                 w = 0.0
             # If there is salt and temp in the dataset, get it
-            if self.temp_name != None and self.salt_name != None:
+            if self.temp_name is not None and self.salt_name is not None:
                 temp = np.mean(np.mean(self.dataset.get_values('temp', timeinds=[np.asarray([i])], point=self.part.location )))
                 salt = np.mean(np.mean(self.dataset.get_values('salt', timeinds=[np.asarray([i])], point=self.part.location )))
 
@@ -761,7 +758,7 @@ class ForceParticle(object):
                 else:
                     w = 0.0
 
-                if self.temp_name != None and self.salt_name != None:
+                if self.temp_name is not None and self.salt_name is not None:
                     temparray1 = self.dataset.get_values('temp', timeinds=[np.asarray([i])], point=self.part.location, num=2)
                     saltarray1 = self.dataset.get_values('salt', timeinds=[np.asarray([i])], point=self.part.location, num=2)
                     temp = temparray1.mean()
@@ -787,7 +784,6 @@ class ForceParticle(object):
 
         return u, v, w, temp, salt
 
-
     def __call__(self, proc, active):
 
         self.active = active
@@ -800,18 +796,17 @@ class ForceParticle(object):
                 self.usebathy = False
 
         self._shoreline = None
-        if self.useshore == True:
+        if self.useshore is True:
             self._shoreline = Shoreline(path=self.shoreline_path, feature_name=self.shoreline_feature, point=self.release_location_centroid, spatialbuffer=0.25)
             # Make sure we are not starting on land.  Raises exception if we are.
             self._shoreline.intersect(start_point=self.release_location_centroid, end_point=self.release_location_centroid)
 
-        self.proc = proc
-        part = self.part
+        
 
-        if self.active.value == True:
-            while self.get_data.value == True:
-                logger.debug("Waiting for DataController to start...")
-                timer.sleep(10)
+        if self.active.value is True:
+            while self.get_data.value is True:
+                logger.info("Waiting for DataController to start...")
+                timer.sleep(5)
                 pass
 
         # Initialize commondataset of local cache, then
@@ -834,7 +829,7 @@ class ForceParticle(object):
         modelTimestep, newtimes = AsaTransport.get_time_objects_from_model_timesteps(self.times, start=self.start_time)
 
         # Load Timevar from pickle serialization
-        f = open(self.timevar_pickle_path,"rb")
+        f = open(self.timevar_pickle_path, "rb")
         timevar = pickle.load(f)
         f.close()
 
@@ -856,17 +851,10 @@ class ForceParticle(object):
         # location as the 'newtime' object.
         for loop_i, i in enumerate(time_indexs[0:-1]):
 
-            if self.active.value == False:
+            if self.active.value is False:
                 raise ValueError("Particle exiting due to Failure.")
 
             newloc = None
-
-            # if need a time that is outside of what we have
-            #if self.active.value == True:
-            #    while self.get_data.value == True:
-            #        logger.info("Waiting for DataController to get out...")
-            #        timer.sleep(4)
-            #        pass
 
             # Get the variable data required by the models
             if self.time_method == 'nearest':
@@ -874,48 +862,45 @@ class ForceParticle(object):
             elif self.time_method == 'interp':
                 u, v, w, temp, salt = self.data_interp(i, timevar, newtimes[loop_i])
             else:
-                logger.warn("Method for computing u,v,w,temp,salt not supported!")
-
-            #logger.info("U: %.4f, V: %.4f, W: %.4f" % (u,v,w))
-            #logger.info("Temp: %.4f, Salt: %.4f" % (temp,salt))
+                logger.warn("Method for computing u,v,w,temp,salt is unknown. Only 'nearest' and 'interp' are supported.")
 
             # Get the bathy value at the particles location
-            if self.usebathy == True:
-                bathymetry_value = self._bathymetry.get_depth(part.location)
+            if self.usebathy is True:
+                bathymetry_value = self._bathymetry.get_depth(self.part.location)
             else:
                 bathymetry_value = -999999999999999
 
             # Age the particle by the modelTimestep (seconds)
             # 'Age' meaning the amount of time it has been forced.
-            part.age(seconds=modelTimestep[loop_i])
+            self.part.age(seconds=modelTimestep[loop_i])
 
             # loop over models - sort these in the order you want them to run
             for model in self.models:
-                movement = model.move(part, u, v, w, modelTimestep[loop_i], temperature=temp, salinity=salt, bathymetry_value=bathymetry_value)
+                movement = model.move(self.part, u, v, w, modelTimestep[loop_i], temperature=temp, salinity=salt, bathymetry_value=bathymetry_value)
                 newloc = Location4D(latitude=movement['latitude'], longitude=movement['longitude'], depth=movement['depth'], time=newtimes[loop_i+1])
-                logger.debug("%s - moved %.3f meters (horizontally) and %.3f meters (vertically) by %s with data from %s" % (part.logstring(), movement['distance'], movement['vertical_distance'], model.__class__.__name__, newtimes[loop_i].isoformat()))
+                logger.debug("%s - moved %.3f meters (horizontally) and %.3f meters (vertically) by %s with data from %s" % (self.part.logstring(), movement['distance'], movement['vertical_distance'], model.__class__.__name__, newtimes[loop_i].isoformat()))
                 if newloc:
-                    self.boundary_interaction(particle=part, starting=part.location, ending=newloc,
-                        distance=movement['distance'], angle=movement['angle'],
-                        azimuth=movement['azimuth'], reverse_azimuth=movement['reverse_azimuth'],
-                        vertical_distance=movement['vertical_distance'], vertical_angle=movement['vertical_angle'])
-                logger.debug("%s - was forced by %s and is now at %s" % (part.logstring(), model.__class__.__name__, part.location.logstring()))
+                    self.boundary_interaction(particle=self.part, starting=self.part.location, ending=newloc,
+                                              distance=movement['distance'], angle=movement['angle'],
+                                              azimuth=movement['azimuth'], reverse_azimuth=movement['reverse_azimuth'],
+                                              vertical_distance=movement['vertical_distance'], vertical_angle=movement['vertical_angle'])
+                logger.debug("%s - was forced by %s and is now at %s" % (self.part.logstring(), model.__class__.__name__, self.part.location.logstring()))
 
-            part.note = part.outputstring()
+            self.part.note = self.part.outputstring()
             # Each timestep, save the particles status and environmental variables.
             # This keep fields such as temp, salt, halted, settled, and dead matched up with the number of timesteps
-            part.save()
+            self.part.save()
 
         # We won't pull data for the last entry in locations, but we need to populate it with fill data.
-        part.fill_environment_gap()
+        self.part.fill_environment_gap()
 
-        if self.usebathy == True:
+        if self.usebathy is True:
             self._bathymetry.close()
 
-        if self.useshore == True:
+        if self.useshore is True:
             self._shoreline.close()
 
-        return part
+        return self.part
 
     def boundary_interaction(self, **kwargs):
         """
@@ -935,14 +920,14 @@ class ForceParticle(object):
 
                 # This relies on the shoreline to put the particle in water and not on shore.
                 resulting_point = self._shoreline.react(start_point=starting,
-                                              end_point=ending,
-                                              hit_point=hitpoint,
-                                              reverse_distance=self.reverse_distance,
-                                              feature=intersection_point['feature'],
-                                              distance=kwargs.get('distance'),
-                                              angle=kwargs.get('angle'),
-                                              azimuth=kwargs.get('azimuth'),
-                                              reverse_azimuth=kwargs.get('reverse_azimuth'))
+                                                        end_point=ending,
+                                                        hit_point=hitpoint,
+                                                        reverse_distance=self.reverse_distance,
+                                                        feature=intersection_point['feature'],
+                                                        distance=kwargs.get('distance'),
+                                                        angle=kwargs.get('angle'),
+                                                        azimuth=kwargs.get('azimuth'),
+                                                        reverse_azimuth=kwargs.get('reverse_azimuth'))
                 ending.latitude = resulting_point.latitude
                 ending.longitude = resulting_point.longitude
                 ending.depth = resulting_point.depth
@@ -962,9 +947,8 @@ class ForceParticle(object):
         # sea-surface
         if self.usesurface:
             if ending.depth > 0:
-                #logger.debug("%s - rose out of the water.  Setting depth to 0." % particle.logstring())
+                logger.debug("%s - rose out of the water.  Setting depth to 0." % particle.logstring())
                 ending.depth = 0
 
         particle.location = ending
         return
-

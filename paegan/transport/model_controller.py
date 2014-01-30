@@ -194,7 +194,7 @@ class ModelController(object):
         # Calculate the model timesteps
         # We need times = len(self._nstep) + 1 since data is stored one timestep
         # after a particle is forced with the final timestep's data.
-        times = range(0,(self._step*self._nstep)+1,self._step)
+        times = range(0, (self._step*self._nstep)+1, self._step)
         # Calculate a datetime object for each model timestep
         # This method is duplicated in DataController and ForceParticle
         # using the 'times' variables above.  Will be useful in those other
@@ -349,30 +349,30 @@ class ModelController(object):
         logger.debug('Adding %i particles as tasks' % len(self.particles))
         for part in self.particles:
             forcing = parallel.ForceParticle(part,
-                                        hydrodataset,
-                                        common_variables,
-                                        timevar_pickle_path,
-                                        times,
-                                        self.start,
-                                        self._models,
-                                        self.reference_location.point,
-                                        self._use_bathymetry,
-                                        self._use_shoreline,
-                                        self._use_seasurface,
-                                        get_data,
-                                        n_run,
-                                        read_lock,
-                                        has_read_lock,
-                                        read_count,
-                                        point_get,
-                                        data_request_lock,
-                                        has_data_request_lock,
-                                        reverse_distance=self.reverse_distance,
-                                        bathy=self.bathy_path,
-                                        shoreline_path=self.shoreline_path,
-                                        shoreline_feature=self.shoreline_feature,
-                                        cache=self.cache_path,
-                                        time_method=self.time_method)
+                                             hydrodataset,
+                                             common_variables,
+                                             timevar_pickle_path,
+                                             times,
+                                             self.start,
+                                             self._models,
+                                             self.reference_location.point,
+                                             self._use_bathymetry,
+                                             self._use_shoreline,
+                                             self._use_seasurface,
+                                             get_data,
+                                             n_run,
+                                             read_lock,
+                                             has_read_lock,
+                                             read_count,
+                                             point_get,
+                                             data_request_lock,
+                                             has_data_request_lock,
+                                             reverse_distance=self.reverse_distance,
+                                             bathy=self.bathy_path,
+                                             shoreline_path=self.shoreline_path,
+                                             shoreline_feature=self.shoreline_feature,
+                                             cache=self.cache_path,
+                                             time_method=self.time_method)
             tasks.put(forcing)
 
         # Create workers for the particles.
@@ -397,7 +397,7 @@ class ModelController(object):
                 # Poll the active processes to make sure they are all alive and then continue with loop
                 if not data_controller_process.is_alive() and data_controller_process.exitcode != 0:
                     # Data controller is zombied, kill off other processes.
-                    get_data.value == False
+                    get_data.value is False
                     results.put((-2, "DataController"))
 
                 new_procs = []
@@ -439,7 +439,6 @@ class ModelController(object):
                             except:
                                 pass
 
-
                 for p in old_procs:
                     try:
                         procs.remove(p)
@@ -454,7 +453,7 @@ class ModelController(object):
             else:
                 # We got one.
                 retrieved += 1
-                if code == None:
+                if code is None:
                     logger.warn("Got an unrecognized response from a task.")
                 elif code == -1:
                     logger.warn("Particle %s has FAILED!!" % tempres.uid)
@@ -473,15 +472,15 @@ class ModelController(object):
                     logger.info("Particle %d finished" % tempres.uid)
                     return_particles.append(tempres)
                     # We mulitply by 95 here to save 5% for the exporting
-                    logger.progress((round((retrieved / number_of_tasks) * 90.,1), "Particle %d finished" % tempres.uid))
+                    logger.progress((round((retrieved / number_of_tasks) * 90., 1), "Particle %d finished" % tempres.uid))
                 elif tempres == "DataController":
                     logger.info("DataController finished")
-                    logger.progress((round((retrieved / number_of_tasks) * 90.,1), "DataController finished"))
+                    logger.progress((round((retrieved / number_of_tasks) * 90., 1), "DataController finished"))
                 else:
                     logger.info("Got a strange result on results queue")
                     logger.info(str(tempres))
 
-                logger.info("Retrieved %i/%i results" % (int(retrieved),number_of_tasks))
+                logger.info("Retrieved %i/%i results" % (int(retrieved), number_of_tasks))
 
         if len(return_particles) != len(self.particles):
             logger.warn("Some particles failed and are not included in the output")
