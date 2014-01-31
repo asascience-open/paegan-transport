@@ -5,7 +5,6 @@ import math
 import traceback
 import Queue
 import multiprocessing
-import cPickle as pickle
 
 import numpy as np
 import netCDF4
@@ -421,7 +420,7 @@ class ForceParticle(object):
     def __str__(self):
         return self.part.__str__()
 
-    def __init__(self, part, remotehydro, common_variables, timevar_pickle_path, times, start_time, models,
+    def __init__(self, part, remotehydro, common_variables, timevar, times, start_time, models,
                  release_location_centroid, usebathy, useshore, usesurface,
                  get_data, n_run, read_lock, has_read_lock, read_count,
                  point_get, data_request_lock, has_data_request_lock, reverse_distance=None, bathy=None,
@@ -455,7 +454,7 @@ class ForceParticle(object):
         self.has_data_request_lock = has_data_request_lock
         self.shoreline_path = shoreline_path
         self.shoreline_feature = shoreline_feature
-        self.timevar_pickle_path = timevar_pickle_path
+        self.timevar = timevar
 
         # Set common variable names
         self.uname = common_variables.get("u", None)
@@ -526,7 +525,7 @@ class ForceParticle(object):
         #    sety[1] = 0.
         return sety[0] + (x - setx[0]) * ( (sety[1]-sety[0]) / (setx[1]-setx[0]) )
 
-    def data_interp(self, i, timevar, currenttime):
+    def data_interp(self, i, currenttime):
         """
             Method to streamline request for data from cache,
             Uses linear interpolation bewtween timesteps to
@@ -650,7 +649,7 @@ class ForceParticle(object):
 
             # Linear interp of data between timesteps
             currenttime = date2num(currenttime)
-            timevar = timevar.datenum
+            timevar = self.timevar.datenum
             u = self.linterp(timevar[i:i+2], u, currenttime)
             v = self.linterp(timevar[i:i+2], v, currenttime)
             w = self.linterp(timevar[i:i+2], w, currenttime)
@@ -801,8 +800,6 @@ class ForceParticle(object):
             # Make sure we are not starting on land.  Raises exception if we are.
             self._shoreline.intersect(start_point=self.release_location_centroid, end_point=self.release_location_centroid)
 
-        
-
         if self.active.value is True:
             while self.get_data.value is True:
                 logger.info("Waiting for DataController to start...")
@@ -828,15 +825,10 @@ class ForceParticle(object):
         # Calculate datetime at every timestep
         modelTimestep, newtimes = AsaTransport.get_time_objects_from_model_timesteps(self.times, start=self.start_time)
 
-        # Load Timevar from pickle serialization
-        f = open(self.timevar_pickle_path, "rb")
-        timevar = pickle.load(f)
-        f.close()
-
         if self.time_method == 'interp':
-            time_indexs = timevar.nearest_index(newtimes, select='before')
+            time_indexs = self.timevar.nearest_index(newtimes, select='before')
         elif self.time_method == 'nearest':
-            time_indexs = timevar.nearest_index(newtimes)
+            time_indexs = self.timevar.nearest_index(newtimes)
         else:
             logger.warn("Method for computing u,v,w,temp,salt not supported!")
         try:
@@ -860,7 +852,7 @@ class ForceParticle(object):
             if self.time_method == 'nearest':
                 u, v, w, temp, salt = self.data_nearest(i, newtimes[loop_i])
             elif self.time_method == 'interp':
-                u, v, w, temp, salt = self.data_interp(i, timevar, newtimes[loop_i])
+                u, v, w, temp, salt = self.data_interp(i, newtimes[loop_i])
             else:
                 logger.warn("Method for computing u,v,w,temp,salt is unknown. Only 'nearest' and 'interp' are supported.")
 

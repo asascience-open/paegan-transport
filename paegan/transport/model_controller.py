@@ -314,20 +314,14 @@ class ModelController(object):
         logger.debug("Retrieving variable information from dataset")
         common_variables = self.get_common_variables_from_dataset(ds)
 
+        timevar = None
         try:
             assert common_variables.get("u") in ds._current_variables
             assert common_variables.get("v") in ds._current_variables
             assert common_variables.get("x") in ds._current_variables
             assert common_variables.get("y") in ds._current_variables
 
-            logger.debug("Pickling time variable to disk for particles")
             timevar = ds.gettimevar(common_variables.get("u"))
-            f, timevar_pickle_path = tempfile.mkstemp()
-            os.close(f)
-            f = open(timevar_pickle_path, "wb")
-            pickle.dump(timevar, f)
-            f.close()
-            ds.closenc()
         except AssertionError:
             logger.exception("Could not locate variables needed to run model: %s" % unicode(common_variables))
             raise DataControllerError("A required data variable was not found in %s" % hydrodataset)
@@ -351,7 +345,7 @@ class ModelController(object):
             forcing = parallel.ForceParticle(part,
                                              hydrodataset,
                                              common_variables,
-                                             timevar_pickle_path,
+                                             timevar,
                                              times,
                                              self.start,
                                              self._models,
@@ -376,7 +370,7 @@ class ModelController(object):
             tasks.put(forcing)
 
         # Create workers for the particles.
-        procs = [ parallel.Consumer(tasks, results, n_run, nproc_lock, active, get_data, name="ForceParticle-%d"%i)
+        procs = [ parallel.Consumer(tasks, results, n_run, nproc_lock, active, get_data, name="ForceParticle-%d" % i)
                   for i in xrange(nproc - 1) ]
         for w in procs:
             w.start()
@@ -509,8 +503,8 @@ class ModelController(object):
         # Remove Manager so it shuts down
         del mgr
 
-        # Remove pickled timevar
-        os.remove(timevar_pickle_path)
+        # Remove timevar
+        del timevar
 
         # Remove the cache file
         if remove_cache is True:
