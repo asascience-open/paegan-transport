@@ -902,6 +902,8 @@ class ForceParticle(object):
             # This keep fields such as temp, salt, halted, settled, and dead matched up with the number of timesteps
             self.part.save()
 
+        self.dataset.closenc()
+
         # We won't pull data for the last entry in locations, but we need to populate it with fill data.
         self.part.fill_environment_gap()
 
