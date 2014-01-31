@@ -184,6 +184,9 @@ class ModelController(object):
 
     def run(self, hydrodataset, **kwargs):
 
+        # Relax.
+        time.sleep(2)
+
         # Add ModelController description to logfile
         logger.info(self)
 
@@ -205,22 +208,30 @@ class ModelController(object):
         time_chunk = self._time_chunk
         horiz_chunk = self._horiz_chunk
 
-        # Should we remove the cache file at the end of the run?
-        remove_cache = kwargs.get("remove_cache", True)
+        caching = kwargs.get("caching", True)
+        if caching is True:
+            # Should we remove the cache file at the end of the run?
+            remove_cache = kwargs.get("remove_cache", True)
+            self.cache_path = kwargs.get("cache", None)
+
+            # Create a temp file for the cache if nothing was passed in
+            if self.cache_path is None:
+                default_cache_dir = os.path.join(os.path.dirname(__file__), "_cache")
+                temp_name = AsaRandom.filename(prefix=str(datetime.now().microsecond), suffix=".nc")
+                self.cache_path = os.path.join(default_cache_dir, temp_name)
+
+            # Be sure the cache directory exists
+            if not os.path.exists(os.path.dirname(self.cache_path)):
+                logger.info("Creating cache directory: %s" % self.cache_path)
+                os.makedirs(os.path.dirname(self.cache_path))
+        else:
+            # Don't remove cache if we are not caching, because the cache path is set to the dataset path!
+            # DONT SET THIS TO TRUE
+            remove_cache = False
+            # Use the hydrodataset as the cache
+            self.cache_path = hydrodataset
 
         self.bathy_path = kwargs.get("bathy", None)
-
-        self.cache_path = kwargs.get("cache", None)
-        if self.cache_path is None:
-            # Generate temp filename for dataset cache
-            default_cache_dir = os.path.join(os.path.dirname(__file__), "_cache")
-            temp_name = AsaRandom.filename(prefix=str(datetime.now().microsecond), suffix=".nc")
-            self.cache_path = os.path.join(default_cache_dir, temp_name)
-
-        # Be sure the cache directory exists
-        if not os.path.exists(os.path.dirname(self.cache_path)):
-            logger.info("Creating cache directory: %s" % self.cache_path)
-            os.makedirs(os.path.dirname(self.cache_path))
 
         logger.progress((1, "Setting up particle start locations"))
         point_locations = []
@@ -281,7 +292,9 @@ class ModelController(object):
         # Particles use this to tell the Data Controller to "get_data".
         # The DataController sets this to False when it is done writing to the cache file.
         # Particles will wait for this to be False before reading from the cache file.
-        get_data = mgr.Value('bool', True)
+        # If we are caching, this starts as True so the Particles don't take off.  If we
+        # are not caching, this is False so the Particles can start immediatly.
+        get_data = mgr.Value('bool', caching)
         # Particles use this to tell the DataContoller which indices to 'get_data' for
         point_get = mgr.Value('list', [0, 0, 0])
 
@@ -334,7 +347,7 @@ class ModelController(object):
         data_controller = parallel.DataController(hydrodataset, common_variables, n_run, get_data, write_lock, has_write_lock, read_lock, read_count,
                                                   time_chunk, horiz_chunk, times,
                                                   self.start, point_get, self.reference_location,
-                                                  cache=self.cache_path)
+                                                  caching=caching, cache_path=self.cache_path)
         tasks.put(data_controller)
         # Create DataController worker
         data_controller_process = parallel.Consumer(tasks, results, n_run, nproc_lock, active, get_data, name="DataController")
@@ -342,8 +355,8 @@ class ModelController(object):
 
         logger.debug('Adding %i particles as tasks' % len(self.particles))
         for part in self.particles:
-            forcing = parallel.ForceParticle(part,
-                                             hydrodataset,
+            forcing = parallel.ForceParticle(self.cache_path,
+                                             part,
                                              common_variables,
                                              timevar,
                                              times,
@@ -365,8 +378,8 @@ class ModelController(object):
                                              bathy=self.bathy_path,
                                              shoreline_path=self.shoreline_path,
                                              shoreline_feature=self.shoreline_feature,
-                                             cache=self.cache_path,
-                                             time_method=self.time_method)
+                                             time_method=self.time_method,
+                                             caching=caching)
             tasks.put(forcing)
 
         # Create workers for the particles.
@@ -520,7 +533,7 @@ class ModelController(object):
             # output particle run data to disk when completed
             if "output_formats" in kwargs:
                 # Make sure output_path is also included
-                if kwargs.get("output_path", None) != None:
+                if kwargs.get("output_path", None) is not None:
                     formats = kwargs.get("output_formats")
                     output_path = kwargs.get("output_path")
                     if isinstance(formats, list):
@@ -529,7 +542,7 @@ class ModelController(object):
                             try:
                                 self.export(output_path, format=format)
                             except:
-                                logger.error("Failed to export to: %s" % format)
+                                logger.exception("Failed to export to: %s" % format)
                     else:
                         logger.warn('The output_formats parameter should be a list, not saving any output!')
                 else:

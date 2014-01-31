@@ -14,6 +14,7 @@ from paegan.location4d import Location4D
 from paegan.transport.utils.asatransport import AsaTransport
 from paegan.transport.shoreline import Shoreline
 from paegan.transport.bathymetry import Bathymetry
+from paegan.transport.exceptions import DataControllerError
 
 from paegan.cdm.dataset import CommonDataset
 from paegan.cdm.timevar import date2num
@@ -72,18 +73,19 @@ class Consumer(multiprocessing.Process):
 
 
 class DataController(object):
-    def __init__(self, url, common_variables, n_run, get_data, write_lock, has_write_lock, read_lock, read_count,
-                 time_chunk, horiz_chunk, times,
-                 start_time, point_get, start,
-                 **kwargs
-                 ):
+    def __init__(self, hydrodataset, common_variables, n_run, get_data, write_lock, has_write_lock, read_lock, read_count,
+                 time_chunk, horiz_chunk, times, start_time, point_get, start, **kwargs):
         """
             The data controller controls the updating of the
             local netcdf data cache
         """
-        assert "cache" in kwargs
-        self.cache_path = kwargs["cache"]
-        self.url = url
+        assert "cache_path" in kwargs
+        self.cache_path = kwargs["cache_path"]
+        self.caching = kwargs.get("caching", True)
+        self.hydrodataset = hydrodataset
+        if self.cache_path == self.hydrodataset and self.caching is True:
+            raise DataControllerError("Caching is set to True but the cache path and data path are the same.  Refusing to overwrite the data path.")
+
         self.n_run = n_run
         self.get_data = get_data
         self.write_lock = write_lock
@@ -153,9 +155,8 @@ class DataController(object):
     def __call__(self, proc, active):
         c = 0
 
-        self.dataset = CommonDataset.open(self.url)
+        self.dataset = CommonDataset.open(self.hydrodataset)
         self.remote = self.dataset.nc
-        cachepath = self.cache_path
 
         # Calculate the datetimes of the model timesteps like
         # the particle objects do, so we can figure out unique
@@ -176,6 +177,11 @@ class DataController(object):
         # While there is at least 1 particle still running,
         # stay alive, if not break
         while self.n_run.value > 1:
+
+            if self.caching is False:
+                logger.debug("Caching is False, not doing much.  Just hanging out until all of the particles finish.")
+                timer.sleep(10)
+                continue
 
             # If particle asks for data, do the following
             if self.get_data.value is True:
@@ -202,7 +208,7 @@ class DataController(object):
                     try:
                         # Open local cache for writing, overwrites
                         # existing file with same name
-                        self.local = netCDF4.Dataset(cachepath, 'w')
+                        self.local = netCDF4.Dataset(self.cache_path, 'w')
 
                         indices = self.dataset.get_indices(self.uname, timeinds=[np.asarray([0])], point=self.start)
                         self.point_get.value = [self.inds[0], indices[-2], indices[-1]]
@@ -340,7 +346,7 @@ class DataController(object):
                     logger.debug("Updating cache file")
                     try:
                         # Open local cache dataset for appending
-                        self.local = netCDF4.Dataset(cachepath, 'a')
+                        self.local = netCDF4.Dataset(self.cache_path, 'a')
 
                         # Create local and remote variable objects
                         # for the variables of interest
@@ -420,22 +426,21 @@ class ForceParticle(object):
     def __str__(self):
         return self.part.__str__()
 
-    def __init__(self, part, remotehydro, common_variables, timevar, times, start_time, models,
+    def __init__(self, hydrodataset, part, common_variables, timevar, times, start_time, models,
                  release_location_centroid, usebathy, useshore, usesurface,
                  get_data, n_run, read_lock, has_read_lock, read_count,
                  point_get, data_request_lock, has_data_request_lock, reverse_distance=None, bathy=None,
-                 shoreline_path=None, shoreline_feature=None, cache=None, time_method=None):
+                 shoreline_path=None, shoreline_feature=None, time_method=None, caching=None):
         """
             This is the task/class/object/job that forces an
             individual particle and communicates with the
             other particles and data controller for local
             cache updates
         """
-        assert cache is not None
-        self.cache_path = cache
+        assert "hydrodataset" is not None
+        self.hydrodataset = hydrodataset
         self.bathy = bathy
         self.common_variables = common_variables
-        self.localpath = self.cache_path
         self.release_location_centroid = release_location_centroid
         self.part = part
         self.times = times
@@ -455,6 +460,10 @@ class ForceParticle(object):
         self.shoreline_path = shoreline_path
         self.shoreline_feature = shoreline_feature
         self.timevar = timevar
+
+        if caching is None:
+            caching = True
+        self.caching = caching
 
         # Set common variable names
         self.uname = common_variables.get("u", None)
@@ -478,6 +487,10 @@ class ForceParticle(object):
             Method to test if cache contains the data that
             the particle needs
         """
+
+        # If we are not caching, we always grab data from the raw source
+        if self.caching is False:
+            return False
 
         logger.debug("Checking cache for data availability at %s." % self.part.location.logstring())
 
@@ -592,16 +605,15 @@ class ForceParticle(object):
                 self.has_data_request_lock.value = -1
                 self.data_request_lock.release()
 
-        # Tell the DataController that we are going to be reading from the file
-        with self.read_lock:
-            self.read_count.value += 1
-            self.has_read_lock.append(os.getpid())
+        if self.caching is True:
+            # Tell the DataController that we are going to be reading from the file
+            with self.read_lock:
+                self.read_count.value += 1
+                self.has_read_lock.append(os.getpid())
 
         try:
             # Open the Cache netCDF file on disk
-            logger.debug("Opening cache datasets")
             self.dataset.opennc()
-            logger.debug("Done opening cache dataset")
 
             # Grab data at time index closest to particle location
             u = [np.mean(np.mean(self.dataset.get_values('u', timeinds=[np.asarray([i])], point=self.part.location ))),
@@ -666,10 +678,12 @@ class ForceParticle(object):
             logger.error("Error in data_interp method on ForceParticle")
             raise
         finally:
-            self.dataset.closenc()
-            with self.read_lock:
-                self.read_count.value -= 1
-                self.has_read_lock.remove(os.getpid())
+            # If caching is False, we don't have to close the dataset.  We can stay in read-only mode.
+            if self.caching is True:
+                self.dataset.closenc()
+                with self.read_lock:
+                    self.read_count.value -= 1
+                    self.has_read_lock.remove(os.getpid())
 
         return u, v, w, temp, salt
 
@@ -723,9 +737,10 @@ class ForceParticle(object):
                 self.data_request_lock.release()
 
         # Tell the DataController that we are going to be reading from the file
-        with self.read_lock:
-            self.read_count.value += 1
-            self.has_read_lock.append(os.getpid())
+        if self.caching is True:
+            with self.read_lock:
+                self.read_count.value += 1
+                self.has_read_lock.append(os.getpid())
 
         try:
             # Open netcdf file on disk from commondataset
@@ -776,10 +791,12 @@ class ForceParticle(object):
             logger.error("Error in data_nearest on ForceParticle")
             raise
         finally:
-            self.dataset.closenc()
-            with self.read_lock:
-                self.read_count.value -= 1
-                self.has_read_lock.remove(os.getpid())
+            # If caching is False, we don't have to close the dataset.  We are in read only anyway.
+            if self.caching is True:
+                self.dataset.closenc()
+                with self.read_lock:
+                    self.read_count.value -= 1
+                    self.has_read_lock.remove(os.getpid())
 
         return u, v, w, temp, salt
 
@@ -809,18 +826,20 @@ class ForceParticle(object):
         # Initialize commondataset of local cache, then
         # close the related netcdf file
         try:
-            with self.read_lock:
-                self.read_count.value += 1
-                self.has_read_lock.append(os.getpid())
-            self.dataset = CommonDataset.open(self.localpath)
+            if self.caching is True:
+                with self.read_lock:
+                    self.read_count.value += 1
+                    self.has_read_lock.append(os.getpid())
+            self.dataset = CommonDataset.open(self.hydrodataset)
             self.dataset.closenc()
         except StandardError:
-            logger.warn("No cache file: %s.  Particle exiting" % self.localpath)
+            logger.warn("No source dataset: %s.  Particle exiting" % self.hydrodataset)
             raise
         finally:
-            with self.read_lock:
-                self.read_count.value -= 1
-                self.has_read_lock.remove(os.getpid())
+            if self.caching is True:
+                with self.read_lock:
+                    self.read_count.value -= 1
+                    self.has_read_lock.remove(os.getpid())
 
         # Calculate datetime at every timestep
         modelTimestep, newtimes = AsaTransport.get_time_objects_from_model_timesteps(self.times, start=self.start_time)
