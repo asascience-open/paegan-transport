@@ -1,12 +1,11 @@
 import os
 import glob
+import math
 import zipfile
-import multiprocessing
-from shapely.geometry import Point, Polygon, MultiPolygon, MultiPoint, LineString
+from shapely.geometry import MultiPoint, LineString
 
 # NetCDF
 import netCDF4
-import numpy as np
 
 # Trackline
 from shapely.geometry import mapping
@@ -20,10 +19,12 @@ import cPickle as pickle
 
 from paegan.logger import logger
 
+
 class Export(object):
     @classmethod
     def export(cls, **kwargs):
         raise("Please implement the export method of your Export class.")
+
 
 class Trackline(Export):
     @classmethod
@@ -40,11 +41,14 @@ class Trackline(Export):
 
         ls = LineString(track_coords)
 
+        if not os.path.exists(folder):
+            os.makedirs(folder)
         filepath = os.path.join(folder, "trackline.geojson")
         f = open(filepath, "wb")
         f.write(json.dumps(mapping(ls)))
         f.close()
         return filepath
+
 
 class GDALShapefile(Export):
     @classmethod
@@ -52,22 +56,24 @@ class GDALShapefile(Export):
 
         shape_schema = {'geometry': 'Point',
                         'properties': OrderedDict([('Particle', 'int'),
-                                        ('Date', 'str'),
-                                        ('Lat', 'float'),
-                                        ('Lon', 'float'),
-                                        ('Depth', 'float'),
-                                        ('Temp', 'float'),
-                                        ('Salt', 'float'),
-                                        ('U', 'float'),
-                                        ('V', 'float'),
-                                        ('W', 'float'),
-                                        ('Settled', 'str'),
-                                        ('Dead', 'str'),
-                                        ('Halted', 'str'),
-                                        ('Age', 'float'),
-                                        ('Notes' , 'str')])}
+                                                   ('Date', 'str'),
+                                                   ('Lat', 'float'),
+                                                   ('Lon', 'float'),
+                                                   ('Depth', 'float'),
+                                                   ('Temp', 'float'),
+                                                   ('Salt', 'float'),
+                                                   ('U', 'float'),
+                                                   ('V', 'float'),
+                                                   ('W', 'float'),
+                                                   ('Settled', 'str'),
+                                                   ('Dead', 'str'),
+                                                   ('Halted', 'str'),
+                                                   ('Age', 'float'),
+                                                   ('Notes' , 'str')])}
         shape_crs = {'no_defs': True, 'ellps': 'WGS84', 'datum': 'WGS84', 'proj': 'longlat'}
 
+        if not os.path.exists(folder):
+            os.makedirs(folder)
         filepath = os.path.join(folder, "gdalshape.shp")
 
         with collection(filepath, "w", driver='ESRI Shapefile', schema=shape_schema, crs=shape_crs) as shape:
@@ -128,12 +134,12 @@ class GDALShapefile(Export):
                 if len(normalized_locations) != len(normalized_settled):
                     logger.info("No Settled being added to shapefile.")
                     # Create list of 'None' equal to the length of locations
-                    normalized_settled = [None] * len(normalized_locations) 
+                    normalized_settled = [None] * len(normalized_locations)
 
                 if len(normalized_locations) != len(normalized_dead):
                     logger.info("No Dead being added to shapefile.")
                     # Create list of 'None' equal to the length of locations
-                    normalized_dead = [None] * len(normalized_locations) 
+                    normalized_dead = [None] * len(normalized_locations)
 
                 if len(normalized_locations) != len(normalized_halted):
                     logger.info("No Halted being added to shapefile.")
@@ -146,7 +152,7 @@ class GDALShapefile(Export):
                     normalized_ages = [-9999.9] * len(normalized_locations)
                 else:
                     # Replace any None with fill value
-                    normalized_ages = (-9999.9 if not x else round(x,3) for x in normalized_ages)
+                    normalized_ages = (-9999.9 if not x else round(x, 3) for x in normalized_ages)
 
                 if len(normalized_locations) != len(normalized_notes):
                     logger.info("No Notes being added to shapefile.")
@@ -156,20 +162,20 @@ class GDALShapefile(Export):
                 for loc, temp, salt, u, v, w, settled, dead, halted, age, note in zip(normalized_locations, normalized_temps, normalized_salts, normalized_u, normalized_v, normalized_w, normalized_settled, normalized_dead, normalized_halted, normalized_ages, normalized_notes):
                     shape.write({   'geometry': mapping(loc.point),
                                     'properties': OrderedDict([('Particle', particle.uid),
-                                                    ('Date', unicode(loc.time.isoformat())),
-                                                    ('Lat', float(loc.latitude)),
-                                                    ('Lon', float(loc.longitude)),
-                                                    ('Depth', float(loc.depth)),
-                                                    ('Temp', float(temp)),
-                                                    ('Salt', float(salt)),
-                                                    ('U', float(u)),
-                                                    ('V', float(v)),
-                                                    ('W', float(w)),
-                                                    ('Settled', unicode(settled)),
-                                                    ('Dead', unicode(dead)),
-                                                    ('Halted', unicode(halted)),
-                                                    ('Age', float(age)),
-                                                    ('Notes' , unicode(note))])})
+                                                               ('Date', unicode(loc.time.isoformat())),
+                                                               ('Lat', float(loc.latitude)),
+                                                               ('Lon', float(loc.longitude)),
+                                                               ('Depth', float(loc.depth)),
+                                                               ('Temp', float(temp)),
+                                                               ('Salt', float(salt)),
+                                                               ('U', float(u)),
+                                                               ('V', float(v)),
+                                                               ('W', float(w)),
+                                                               ('Settled', unicode(settled)),
+                                                               ('Dead', unicode(dead)),
+                                                               ('Halted', unicode(halted)),
+                                                               ('Age', float(age)),
+                                                               ('Notes' , unicode(note))])})
 
         # Zip the output
         shpzip = zipfile.ZipFile(os.path.join(folder, "shapefile.shp.zip"), mode='w')
@@ -177,6 +183,7 @@ class GDALShapefile(Export):
             shpzip.write(f, os.path.basename(f))
             os.remove(f)
         shpzip.close()
+
 
 class NetCDF(Export):
     @classmethod
@@ -186,9 +193,12 @@ class NetCDF(Export):
             netcdf file
         """
         time_units = 'seconds since 1990-01-01 00:00:00'
-        
+
         # Create netcdf file, overwrite existing
-        filepath = os.path.join(folder,'trajectories.nc')
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+
+        filepath = os.path.join(folder, 'trajectories.nc')
         nc = netCDF4.Dataset(filepath, 'w')
         # Create netcdf dimensions
         nc.createDimension('time', None)
@@ -331,7 +341,7 @@ class NetCDF(Export):
         lon.units = "degrees_east"
 
         part.cf_role = "trajectory_id"
-        
+
         # Global attributes
         nc.featureType = "trajectory"
         nc.summary = str(summary)
@@ -341,6 +351,7 @@ class NetCDF(Export):
         nc.sync()
         nc.close()
 
+
 class Pickle(Export):
     @classmethod
     def export(cls, folder, particles, datetimes):
@@ -349,12 +360,15 @@ class Pickle(Export):
             This can be used to debug or to generate different output
             in the future.
         """
-        particle_path = os.path.join(folder,'particles.pickle')
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+
+        particle_path = os.path.join(folder, 'particles.pickle')
         f = open(particle_path, "wb")
         pickle.dump(particles, f)
         f.close()
 
-        datetimes_path = os.path.join(folder,'datetimes.pickle')
+        datetimes_path = os.path.join(folder, 'datetimes.pickle')
         f = open(datetimes_path, "wb")
         pickle.dump(datetimes, f)
         f.close()
