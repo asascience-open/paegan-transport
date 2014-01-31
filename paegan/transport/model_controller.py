@@ -31,7 +31,7 @@ class ModelController(object):
     """
     def __init__(self, **kwargs):
 
-        """ 
+        """
             Mandatory named arguments:
             * geometry (Shapely Geometry Object) no default
             * depth (meters) default 0
@@ -80,7 +80,7 @@ class ModelController(object):
 
         # The model timesteps in datetime objects
         self.datetimes = []
-        
+
         # Inerchangeables
         if "geometry" in kwargs:
             self.geometry = kwargs.pop('geometry')
@@ -148,21 +148,23 @@ class ModelController(object):
 
     def get_common_variables_from_dataset(self, dataset):
 
-        def getname(name):
-            nm = dataset.get_varname_from_stdname(name)
-            if len(nm) > 0:
-                return nm[0]
-            else:
-                return None
+        def getname(names):
+            for n in names:
+                nm = dataset.get_varname_from_stdname(n)
+                if len(nm) > 0:
+                    return nm[0]
+                else:
+                    continue
+            return None
 
-        uname = getname('eastward_sea_water_velocity') 
-        vname = getname('northward_sea_water_velocity') 
+        uname = getname(['eastward_sea_water_velocity', 'eastward_current'])
+        vname = getname(['northward_sea_water_velocity', 'northward_current'])
         wname = getname('upward_sea_water_velocity')
-        temp_name = getname('sea_water_temperature') 
+        temp_name = getname('sea_water_temperature')
         salt_name = getname('sea_water_salinity')
 
-        coords = dataset.get_coord_names(uname) 
-        xname = coords['xname'] 
+        coords = dataset.get_coord_names(uname)
+        xname = coords['xname']
         yname = coords['yname']
         zname = coords['zname']
         tname = coords['tname']
@@ -182,6 +184,9 @@ class ModelController(object):
 
     def run(self, hydrodataset, **kwargs):
 
+        # Relax.
+        time.sleep(2)
+
         # Add ModelController description to logfile
         logger.info(self)
 
@@ -192,7 +197,7 @@ class ModelController(object):
         # Calculate the model timesteps
         # We need times = len(self._nstep) + 1 since data is stored one timestep
         # after a particle is forced with the final timestep's data.
-        times = range(0,(self._step*self._nstep)+1,self._step)
+        times = range(0, (self._step*self._nstep)+1, self._step)
         # Calculate a datetime object for each model timestep
         # This method is duplicated in DataController and ForceParticle
         # using the 'times' variables above.  Will be useful in those other
@@ -202,20 +207,32 @@ class ModelController(object):
 
         time_chunk = self._time_chunk
         horiz_chunk = self._horiz_chunk
-        low_memory = kwargs.get("low_memory", False)
 
-        # Should we remove the cache file at the end of the run?
-        remove_cache = kwargs.get("remove_cache", True)
+        caching = kwargs.get("caching", True)
+        if caching is True:
+            # Should we remove the cache file at the end of the run?
+            remove_cache = kwargs.get("remove_cache", True)
+            self.cache_path = kwargs.get("cache", None)
+
+            # Create a temp file for the cache if nothing was passed in
+            if self.cache_path is None:
+                default_cache_dir = os.path.join(os.path.dirname(__file__), "_cache")
+                temp_name = AsaRandom.filename(prefix=str(datetime.now().microsecond), suffix=".nc")
+                self.cache_path = os.path.join(default_cache_dir, temp_name)
+
+            # Be sure the cache directory exists
+            if not os.path.exists(os.path.dirname(self.cache_path)):
+                logger.info("Creating cache directory: %s" % self.cache_path)
+                os.makedirs(os.path.dirname(self.cache_path))
+        else:
+            # Don't remove cache if we are not caching, because the cache path is set to the dataset path!
+            # DONT SET THIS TO TRUE
+            remove_cache = False
+            # Use the hydrodataset as the cache
+            self.cache_path = hydrodataset
 
         self.bathy_path = kwargs.get("bathy", None)
 
-        self.cache_path = kwargs.get("cache", None)
-        if self.cache_path is None:
-            # Generate temp filename for dataset cache
-            default_cache_dir = os.path.join(os.path.dirname(__file__), "_cache")
-            temp_name = AsaRandom.filename(prefix=str(datetime.now().microsecond), suffix=".nc")
-            self.cache_path = os.path.join(default_cache_dir, temp_name)
-        
         logger.progress((1, "Setting up particle start locations"))
         point_locations = []
         if isinstance(self.geometry, Point):
@@ -239,7 +256,7 @@ class ModelController(object):
             self.particles.append(p)
 
         # This is where it makes sense to implement the multiprocessing
-        # looping for particles and models. Can handle each particle in 
+        # looping for particles and models. Can handle each particle in
         # parallel probably.
         #
         # Get the number of cores (may take some tuning) and create that
@@ -255,105 +272,118 @@ class ModelController(object):
         # We need a process for each particle and one for the data controller
         nproc = min(number_of_tasks, nproc)
 
-        # When a particle requests data
-        data_request_lock = mgr.Lock()
-        # PID of process with lock
-        has_data_request_lock = mgr.Value('int',-1)
-
-        nproc_lock = mgr.Lock()
-        
         # Create the task queue for all of the particles and the DataController
         tasks = multiprocessing.JoinableQueue(number_of_tasks)
         # Create the result queue for all of the particles and the DataController
         results = mgr.Queue(number_of_tasks)
-        
-        # Create the shared state objects
-        get_data = mgr.Value('bool', True)
-        # Number of tasks
-        n_run = mgr.Value('int', number_of_tasks)
-        updating = mgr.Value('bool', False)
 
-        # When something is reading from cache file
+        # Number of tasks that we need to run.  This is decremented everytime something
+        # completes.
+        n_run = mgr.Value('int', number_of_tasks)
+        # The lock that controls access to the 'n_run' variable
+        nproc_lock = mgr.Lock()
+
+        # Create the shared state objects
+
+        # This tracks if the system is 'alive'.  Most looping whiles will check this
+        # and break out if it is False.  This is True until something goes very wrong.
+        active = mgr.Value('bool', True)
+
+        # Particles use this to tell the Data Controller to "get_data".
+        # The DataController sets this to False when it is done writing to the cache file.
+        # Particles will wait for this to be False before reading from the cache file.
+        # If we are caching, this starts as True so the Particles don't take off.  If we
+        # are not caching, this is False so the Particles can start immediatly.
+        get_data = mgr.Value('bool', caching)
+        # Particles use this to tell the DataContoller which indices to 'get_data' for
+        point_get = mgr.Value('list', [0, 0, 0])
+
+        # This locks access to the 'has_data_request_lock' value
+        data_request_lock = mgr.Lock()
+        # This tracks which Particle PID is asking the DataController for data
+        has_data_request_lock = mgr.Value('int', -1)
+
+        # The lock that controls access to modifying 'has_read_lock' and 'read_count'
         read_lock = mgr.Lock()
-        # list of PIDs that are reading
+        # List of Particle PIDs that are reading from the cache
         has_read_lock = mgr.list()
+        # The number of Particles that are reading from the cache
         read_count = mgr.Value('int', 0)
 
         # When something is writing to the cache file
         write_lock = mgr.Lock()
         # PID of process with lock
-        has_write_lock = mgr.Value('int',-1)
+        has_write_lock = mgr.Value('int', -1)
 
-        point_get = mgr.Value('list', [0, 0, 0])
-        active = mgr.Value('bool', True)
-        
         logger.progress((3, "Initializing and caching hydro model's grid"))
         try:
             ds = CommonDataset.open(hydrodataset)
-            # Query the dataset for common variable names
-            # and the time variable.
-            logger.debug("Retrieving variable information from dataset")
-            common_variables = self.get_common_variables_from_dataset(ds)
+        except Exception:
+            logger.exception("Failed to access dataset %s" % hydrodataset)
+            raise DataControllerError("Inaccessible Dataset: %s" % hydrodataset)
 
-            logger.debug("Pickling time variable to disk for particles")
+        # Query the dataset for common variable names
+        # and the time variable.
+        logger.debug("Retrieving variable information from dataset")
+        common_variables = self.get_common_variables_from_dataset(ds)
+
+        timevar = None
+        try:
+            assert common_variables.get("u") in ds._current_variables
+            assert common_variables.get("v") in ds._current_variables
+            assert common_variables.get("x") in ds._current_variables
+            assert common_variables.get("y") in ds._current_variables
+
             timevar = ds.gettimevar(common_variables.get("u"))
-            f, timevar_pickle_path = tempfile.mkstemp()
-            os.close(f)
-            f = open(timevar_pickle_path, "wb")
-            pickle.dump(timevar, f)
-            f.close()
-            ds.closenc()
-        except:
-            logger.warn("Failed to access remote dataset %s" % hydrodataset)
-            raise DataControllerError("Inaccessible DAP endpoint: %s" % hydrodataset)
+        except AssertionError:
+            logger.exception("Could not locate variables needed to run model: %s" % unicode(common_variables))
+            raise DataControllerError("A required data variable was not found in %s" % hydrodataset)
 
-
-        # Add data controller to the queue first so that it 
+        # Add data controller to the queue first so that it
         # can get the initial data and is not blocked
-        
+
         logger.debug('Starting DataController')
         logger.progress((4, "Starting processes"))
         data_controller = parallel.DataController(hydrodataset, common_variables, n_run, get_data, write_lock, has_write_lock, read_lock, read_count,
                                                   time_chunk, horiz_chunk, times,
                                                   self.start, point_get, self.reference_location,
-                                                  low_memory=low_memory,
-                                                  cache=self.cache_path)
+                                                  caching=caching, cache_path=self.cache_path)
         tasks.put(data_controller)
         # Create DataController worker
         data_controller_process = parallel.Consumer(tasks, results, n_run, nproc_lock, active, get_data, name="DataController")
         data_controller_process.start()
-        
+
         logger.debug('Adding %i particles as tasks' % len(self.particles))
         for part in self.particles:
-            forcing = parallel.ForceParticle(part,
-                                        hydrodataset,
-                                        common_variables,
-                                        timevar_pickle_path,
-                                        times,
-                                        self.start,
-                                        self._models,
-                                        self.reference_location.point,
-                                        self._use_bathymetry,
-                                        self._use_shoreline,
-                                        self._use_seasurface,
-                                        get_data,
-                                        n_run,
-                                        read_lock,
-                                        has_read_lock,
-                                        read_count,
-                                        point_get,
-                                        data_request_lock,
-                                        has_data_request_lock,
-                                        reverse_distance=self.reverse_distance,
-                                        bathy=self.bathy_path,
-                                        shoreline_path=self.shoreline_path,
-                                        shoreline_feature=self.shoreline_feature,
-                                        cache=self.cache_path,
-                                        time_method=self.time_method)
+            forcing = parallel.ForceParticle(self.cache_path,
+                                             part,
+                                             common_variables,
+                                             timevar,
+                                             times,
+                                             self.start,
+                                             self._models,
+                                             self.reference_location.point,
+                                             self._use_bathymetry,
+                                             self._use_shoreline,
+                                             self._use_seasurface,
+                                             get_data,
+                                             n_run,
+                                             read_lock,
+                                             has_read_lock,
+                                             read_count,
+                                             point_get,
+                                             data_request_lock,
+                                             has_data_request_lock,
+                                             reverse_distance=self.reverse_distance,
+                                             bathy=self.bathy_path,
+                                             shoreline_path=self.shoreline_path,
+                                             shoreline_feature=self.shoreline_feature,
+                                             time_method=self.time_method,
+                                             caching=caching)
             tasks.put(forcing)
 
         # Create workers for the particles.
-        procs = [ parallel.Consumer(tasks, results, n_run, nproc_lock, active, get_data, name="ForceParticle-%d"%i)
+        procs = [ parallel.Consumer(tasks, results, n_run, nproc_lock, active, get_data, name="ForceParticle-%d" % i)
                   for i in xrange(nproc - 1) ]
         for w in procs:
             w.start()
@@ -374,7 +404,7 @@ class ModelController(object):
                 # Poll the active processes to make sure they are all alive and then continue with loop
                 if not data_controller_process.is_alive() and data_controller_process.exitcode != 0:
                     # Data controller is zombied, kill off other processes.
-                    get_data.value == False
+                    get_data.value is False
                     results.put((-2, "DataController"))
 
                 new_procs = []
@@ -395,7 +425,7 @@ class ModelController(object):
                         np = parallel.Consumer(tasks, results, n_run, nproc_lock, active, get_data, name=p.name)
                         new_procs.append(np)
                         old_procs.append(p)
-                        
+
                         # Release any locks the PID had
                         if p.pid in has_read_lock:
                             with read_lock:
@@ -408,14 +438,13 @@ class ModelController(object):
                                 data_request_lock.release()
                             except:
                                 pass
-                            
+
                         if has_write_lock.value == p.pid:
                             has_write_lock.value = -1
                             try:
                                 write_lock.release()
                             except:
                                 pass
-                            
 
                 for p in old_procs:
                     try:
@@ -427,11 +456,11 @@ class ModelController(object):
                     procs.append(p)
                     logger.warn("Started a new consumer (%s) to replace a zombie consumer" % p.name)
                     p.start()
-                
+
             else:
                 # We got one.
                 retrieved += 1
-                if code == None:
+                if code is None:
                     logger.warn("Got an unrecognized response from a task.")
                 elif code == -1:
                     logger.warn("Particle %s has FAILED!!" % tempres.uid)
@@ -450,16 +479,16 @@ class ModelController(object):
                     logger.info("Particle %d finished" % tempres.uid)
                     return_particles.append(tempres)
                     # We mulitply by 95 here to save 5% for the exporting
-                    logger.progress((round((retrieved / number_of_tasks) * 90.,1), "Particle %d finished" % tempres.uid))
+                    logger.progress((round((retrieved / number_of_tasks) * 90., 1), "Particle %d finished" % tempres.uid))
                 elif tempres == "DataController":
                     logger.info("DataController finished")
-                    logger.progress((round((retrieved / number_of_tasks) * 90.,1), "DataController finished"))
+                    logger.progress((round((retrieved / number_of_tasks) * 90., 1), "DataController finished"))
                 else:
                     logger.info("Got a strange result on results queue")
                     logger.info(str(tempres))
 
-                logger.info("Retrieved %i/%i results" % (int(retrieved),number_of_tasks))
-        
+                logger.info("Retrieved %i/%i results" % (int(retrieved), number_of_tasks))
+
         if len(return_particles) != len(self.particles):
             logger.warn("Some particles failed and are not included in the output")
 
@@ -479,7 +508,7 @@ class ModelController(object):
                     # Process is hanging, kill it.
                     logger.info("Terminating %s forcefully.  This should have exited itself." % w.name)
                     w.terminate()
-                    
+
         logger.info('Workers complete')
 
         self.particles = return_particles
@@ -487,8 +516,8 @@ class ModelController(object):
         # Remove Manager so it shuts down
         del mgr
 
-        # Remove pickled timevar
-        os.remove(timevar_pickle_path)
+        # Remove timevar
+        del timevar
 
         # Remove the cache file
         if remove_cache is True:
@@ -504,7 +533,7 @@ class ModelController(object):
             # output particle run data to disk when completed
             if "output_formats" in kwargs:
                 # Make sure output_path is also included
-                if kwargs.get("output_path", None) != None:
+                if kwargs.get("output_path", None) is not None:
                     formats = kwargs.get("output_formats")
                     output_path = kwargs.get("output_path")
                     if isinstance(formats, list):
@@ -513,11 +542,11 @@ class ModelController(object):
                             try:
                                 self.export(output_path, format=format)
                             except:
-                                logger.error("Failed to export to: %s" % format)
+                                logger.exception("Failed to export to: %s" % format)
                     else:
-                        logger.warn('The output_formats parameter should be a list, not saving any output!')  
+                        logger.warn('The output_formats parameter should be a list, not saving any output!')
                 else:
-                    logger.warn('No output path defined, not saving any output!')  
+                    logger.warn('No output path defined, not saving any output!')
             else:
                 logger.warn('No output format defined, not saving any output!')
         else:
@@ -529,14 +558,14 @@ class ModelController(object):
 
         logger.progress((99, "Model Run Complete"))
         return
-    
+
     def export(self, folder_path, format=None):
         """
-            General purpose export method, gets file type 
+            General purpose export method, gets file type
             from filepath extension
-            
+
             Valid output formats currently are:
-                Trackline: trackline or trkl or *.trkl                
+                Trackline: trackline or trkl or *.trkl
                 Shapefile: shapefile or shape or shp or *.shp
                 NetCDF:    netcdf or nc or *.nc
         """

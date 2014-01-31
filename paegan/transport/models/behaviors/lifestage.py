@@ -72,7 +72,7 @@ class LifeStage(BaseModel):
 
         temp = kwargs.get('temperature', None)
         salt = kwargs.get('salinity', None)
-        
+
         logger.debug("Temp: %.4f, Salt: %.4f" %(temp,salt))
 
         # IMPORTANT:
@@ -90,7 +90,7 @@ class LifeStage(BaseModel):
         do_duration_growth = True
         modelTimestepDays = modelTimestep / 60. / 60. / 24.
         if self.linear_a is not None and self.linear_b is not None:
-            if particle.temp is not None:
+            if particle.temp is not None and not math.isnan(particle.temp):
                 # linear growth, compute q = t / (Ax+B)
                 # Where timestep t (days), at temperature x (deg C), proportion of stage completed (q)
                 growth = modelTimestepDays / (self.linear_a * particle.temp + self.linear_b)
@@ -99,7 +99,7 @@ class LifeStage(BaseModel):
             else:
                 logger.debug("No temperature found for Particle %s at this location and timestep, skipping linear temperature growth and using duration growth" % particle.uid)
                 pass
-                
+
         if do_duration_growth is True:
             growth = modelTimestepDays / self.duration
             particle.grow(growth)

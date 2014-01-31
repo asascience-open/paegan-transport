@@ -10,10 +10,11 @@ import random
 
 from paegan.transport.utils.asasuncycles import SunCycles
 
+
 class LifeStageTest(unittest.TestCase):
 
     def setUp(self):
-        data = open(os.path.normpath(os.path.join(os.path.dirname(__file__),"./resources/files/lifestage_single.json"))).read()
+        data = open(os.path.normpath(os.path.join(os.path.dirname(__file__), "./resources/files/lifestage_single.json"))).read()
         self.lifestage = LifeStage(json=data)
 
         start_lat = 38
@@ -25,54 +26,55 @@ class LifeStageTest(unittest.TestCase):
 
         self.particles = []
         # Create particles
-        for i in xrange(0,3):
+        for i in xrange(0, 3):
             p = LarvaParticle()
             p.location = self.loc
             self.particles.append(p)
 
         # 48 timesteps at an hour each = 2 days of running
-        self.times = range(0,172800,3600) # in seconds
+        self.times = range(0, 172800, 3600)  # in seconds
         self.temps = []
         self.salts = []
-        for w in xrange(0,48):
-            self.temps.append(random.randint(20,40))
-            self.salts.append(random.randint(10,30))
+        for w in xrange(0, 48):
+            self.temps.append(random.randint(20, 40))
+            self.salts.append(random.randint(10, 30))
 
     def test_diel_cycles(self):
-        data = open(os.path.normpath(os.path.join(os.path.dirname(__file__),"./resources/files/cycles.json"))).read()
+        data = open(os.path.normpath(os.path.join(os.path.dirname(__file__), "./resources/files/cycles.json"))).read()
         lifestage = LifeStage(json=data)
-        
+
         eastern = pytz.timezone("US/Eastern")
-        
+
         loc4d = self.loc
 
         # RISING:2013-05-13 05:55:35 -04:00
         # SETTING: 2013-05-14 20:05:33 -04:00
 
-        loc4d.time = self.start_time.astimezone(eastern).replace(hour=5, minute=45)
+        # 1 hour before sunrise, the first migration
+        loc4d.time = eastern.localize(datetime(2013, 5, 13,  5, 45))
         assert lifestage.get_active_diel(loc4d) == lifestage.diel[0]
 
-        loc4d.time = self.start_time.astimezone(eastern).replace(hour=6, minute=45)
+        # still working off of the 1 hour before runrise, because we haven't hit 1 hour after
+        loc4d.time = eastern.localize(datetime(2013, 5, 13,  6, 45))
         assert lifestage.get_active_diel(loc4d) == lifestage.diel[0]
 
-        loc4d.time = self.start_time.astimezone(eastern).replace(hour=8, minute=30)
+        loc4d.time = eastern.localize(datetime(2013, 5, 13,  8, 30))
         assert lifestage.get_active_diel(loc4d) == lifestage.diel[1]
 
-        loc4d.time = self.start_time.astimezone(eastern).replace(hour=19, minute=10)
+        loc4d.time = eastern.localize(datetime(2013, 5, 13, 19, 10))
         assert lifestage.get_active_diel(loc4d) == lifestage.diel[2]
 
-        loc4d.time = self.start_time.astimezone(eastern).replace(hour=20, minute=00)
+        loc4d.time = eastern.localize(datetime(2013, 5, 13, 20,  0))
         assert lifestage.get_active_diel(loc4d) == lifestage.diel[2]
 
-        loc4d.time = self.start_time.astimezone(eastern).replace(hour=21, minute=06)
+        loc4d.time = eastern.localize(datetime(2013, 5, 13, 21,  6))
         assert lifestage.get_active_diel(loc4d) == lifestage.diel[3]
 
-        loc4d.time = self.start_time.astimezone(eastern).replace(hour=2, minute=45) + timedelta(hours=24)
+        loc4d.time = eastern.localize(datetime(2013, 5, 14, 02, 45))
         assert lifestage.get_active_diel(loc4d) == lifestage.diel[3]
-
 
     def test_no_diel(self):
-        data = json.loads(open(os.path.normpath(os.path.join(os.path.dirname(__file__),"./resources/files/lifestage_single.json"))).read())
+        data = json.loads(open(os.path.normpath(os.path.join(os.path.dirname(__file__), "./resources/files/lifestage_single.json"))).read())
         data['diel'] = []
         self.lifestage = LifeStage(data=data)
 
@@ -91,7 +93,7 @@ class LifeStageTest(unittest.TestCase):
                 movement = self.lifestage.move(p, 0, 0, 0, modelTimestep, temperature=self.temps[i], salinity=self.salts[i])
                 newloc = Location4D(latitude=movement['latitude'], longitude=movement['longitude'], depth=movement['depth'], time=newtime)
                 p.location = newloc
-            
+
         for p in self.particles:
             # Particle should move every timestep
             assert len(p.locations) == len(self.times) + 1
@@ -126,7 +128,7 @@ class LifeStageTest(unittest.TestCase):
                 movement = self.lifestage.move(p, 0, 0, 0, modelTimestep, temperature=self.temps[i], salinity=self.salts[i])
                 newloc = Location4D(latitude=movement['latitude'], longitude=movement['longitude'], depth=movement['depth'], time=newtime)
                 p.location = newloc
-            
+
         for p in self.particles:
             # Particle should move every timestep
             assert len(p.locations) == len(self.times) + 1
@@ -143,7 +145,7 @@ class LifeStageTest(unittest.TestCase):
             # move horizontally.
             assert p.linestring().coords[-1][0] == self.loc.longitude
             assert p.linestring().coords[-1][1] == self.loc.latitude
-            
+
     def test_from_json(self):
 
         assert self.lifestage.name == 'third'
@@ -152,7 +154,7 @@ class LifeStageTest(unittest.TestCase):
         assert self.lifestage.linear_b == 0.2
         assert len(self.lifestage.taxis) == 2
         assert self.lifestage.taxis[0].min_value == -30.0
-        assert self.lifestage.taxis[0].max_value == -40.0        
+        assert self.lifestage.taxis[0].max_value == -40.0
         assert len(self.lifestage.diel) == 2
         assert self.lifestage.diel[0].min_depth == -2.0
         assert self.lifestage.diel[0].max_depth == -4.0
@@ -166,7 +168,7 @@ class LifeStageTest(unittest.TestCase):
         assert isinstance(self.lifestage.diel[0].get_time(loc4d=loc), datetime)
 
     def test_from_dict(self):
-        data = open(os.path.normpath(os.path.join(os.path.dirname(__file__),"./resources/files/lifestage_single.json"))).read()
+        data = open(os.path.normpath(os.path.join(os.path.dirname(__file__), "./resources/files/lifestage_single.json"))).read()
         l = LifeStage(data=json.loads(data))
 
         assert l.name == 'third'
@@ -175,7 +177,7 @@ class LifeStageTest(unittest.TestCase):
         assert l.linear_b == 0.2
         assert len(l.taxis) == 2
         assert l.taxis[1].min_value == -30.0
-        assert l.taxis[1].max_value == -50.0        
+        assert l.taxis[1].max_value == -50.0
         assert len(l.diel) == 2
         assert l.diel[1].min_depth == -2.0
         assert l.diel[1].max_depth == -5.0
